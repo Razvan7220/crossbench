@@ -1,0 +1,15 @@
+# SWE-bench Verified gold-eval convenience profile.
+#
+# Stack with the gold benchmark TOML (no LLM calls; memory disabled):
+#   cross-bench run -b swebench_gold -p swebench_gold \
+#                   --task-id django__django-11099 --db-url none
+#
+# The benchmark TOML sets ``execution_mode = "gold_eval"``. This profile
+# only tags the run and disables memory.
+
+[run]
+tags = ["gold-eval", "harness-sanity", "swebench-verified"]
+
+[system.memory]
+provider = ""
+enabled = false

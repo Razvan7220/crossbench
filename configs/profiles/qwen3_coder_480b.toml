@@ -1,0 +1,81 @@
+# LLM MIXIN: Qwen3-Coder 480B-A35B (q8_0) via Ollama
+#
+# Stack with the SEAL benchmark + no_memory baseline:
+#   cross-bench run -b swebench_pro_seal -p qwen3_coder_480b -p no_memory \
+#                   -n 5 --db-url none
+#
+# **Model.** Alibaba's Qwen3-Coder-480B-A35B (480B total params, 35B
+# activated per token via Mixture-of-Experts) at q8_0 quantization
+# (~480 GB on disk; fits 8×H100 80GB = 640 GB GPU memory). The
+# Ollama tag matches what ``ollama list`` shows on the serving
+# instance — bump the suffix if you re-quantize.
+#
+# **Topology.** This profile assumes Ollama is **self-hosted** on a
+# dedicated GPU EC2 (`p5.48xlarge`) inside the same VPC as the
+# CrossBench ECS cluster. The ECS task talks to Ollama over the
+# instance's private IP on port 11434. The dispatch wires:
+#
+#   * ``OLLAMA_API_BASE`` env var (used by sweagent's LiteLLM Ollama
+#     provider) via ``aws ecs run-task --overrides``.
+#   * ``--agent.model.api_base`` extra arg below (defensive — if
+#     LiteLLM's env-var resolution ever regresses, the explicit CLI
+#     flag still works).
+#
+# **SEAL routing.** SEAL subprocess-invokes ``python -m sweagent run-
+# batch``; the model name is passed via ``--agent.model.name`` to
+# SWE-agent's LiteLLM layer. We use the ``ollama_chat/<model>``
+# scheme so LiteLLM uses Ollama's ``/api/chat`` endpoint (better for
+# multi-turn agent loops than the legacy ``/api/generate``).
+#
+# **Bench-LLM is unused on SEAL** (deviations.md S23) — the
+# ``[system.llm]`` block below exists so the profile is schema-valid
+# if ever stacked with a non-SEAL benchmark.
+
+[run]
+tags = ["ollama", "qwen3-coder-480b-a35b-q8_0", "self-hosted-gpu"]
+
+[benchmark]
+# Overrides ``swebench_pro_seal.toml``'s default Claude model.
+# LiteLLM resolves ``ollama_chat/<model>`` via the Ollama provider;
+# ``OLLAMA_API_BASE`` (env) or ``--agent.model.api_base`` (below)
+# tells it where to find the daemon.
+seal_model_name = "ollama_chat/qwen3-coder:480b-a35b-q8_0"
+
+# Pass the Ollama URL explicitly to sweagent as well so the run
+# doesn't depend on env-var inheritance alone. The placeholder
+# ``${OLLAMA_API_BASE}`` is substituted by CrossBench's TOML loader
+# at run time from the process env (see ``cross_bench/config.py``).
+# When dispatched via ECS, pass the actual URL through the task's
+# ``containerOverrides.environment`` block.
+seal_extra_args = [
+    "--agent.model.api_base=${OLLAMA_API_BASE}",
+]
+
+# Per-instance cost limit doesn't apply to self-hosted Ollama (no
+# vendor billing). The per-instance call limit is what bounds wall-
+# clock + GPU compute per task; keep generous so qwen3-coder gets
+# the full agentic budget. Pro tasks are non-trivial — leaderboard
+# cells use multi-hundred-call budgets via ``step_limit`` in the
+# agent config.
+seal_per_instance_cost_limit = 0.0
+seal_per_instance_call_limit = 0
+
+# Per-task subprocess timeout. Qwen3-Coder at q8_0 is slower than
+# Anthropic / OpenAI inference — give the agent loop room. 7200 s
+# (2 hr) per Pro instance is generous but bounded.
+seal_subprocess_timeout_seconds = 7200
+
+# Bench-side LLM placeholder. Unused under SEAL by design (S23);
+# kept schema-valid so the profile composes with non-SEAL benchmarks
+# if ever stacked there. Points at the same Ollama endpoint via the
+# OpenAI-compatible passthrough that Ollama serves at /v1/.
+[system.llm]
+provider = "generic_openai"
+model = "qwen3-coder:480b-a35b-q8_0"
+temperature = 0.0
+max_tokens = 4096
+# Qwen3-Coder native context window per Alibaba's model card.
+context_window = 256_000
+api_key = "ollama"  # Ollama ignores the key but LiteLLM-style
+                    # clients require something non-empty
+base_url = "${OLLAMA_API_BASE}/v1"

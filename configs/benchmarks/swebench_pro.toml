@@ -1,0 +1,28 @@
+# SWE-bench Pro — Scale AI's harder, multi-language variant.
+#
+# 731 tasks across 11 repos, 4 languages (~38% go, 36% python, 23% js, 3% ts).
+# Uses Scale AI's custom eval harness (NOT Princeton's swebench PyPI package)
+# and Docker Hub images at jefzda/sweap-images:<tag>.
+#
+# Caveat: Scale's public leaderboard uses SEAL scaffold, not mini-swe-agent.
+# Numbers produced here compare internally only, not against the public board.
+#
+# See deviations.md S21 for the scaffold/eval-harness divergence.
+#
+# Usage:
+#   cross-bench run -b swebench_pro -p online -p no_memory -p haiku45 \
+#                   --task-id instance_flipt-io__flipt-2eac... \
+#                   --db-url none
+[run]
+benchmark = "swebench"
+execution_mode = "mini_swe_agent"
+timeout_seconds = 3600
+max_agent_steps = 250
+
+[benchmark]
+variant = "pro"
+include_hints = false
+# Pro doesn't have published BM25/oracle augmented datasets — only
+# retrieval = "none" is supported. See deviations.md S21.
+retrieval = "none"
+requires_network = true

@@ -1,0 +1,43 @@
+# =============================================================================
+#  BASE PROFILE: online
+# =============================================================================
+#  Cloud API mode — uses OpenAI keys.
+#  LLM:        GPT-4o (OpenAI)
+#  Embeddings: text-embedding-3-small (OpenAI)
+#
+#  Stack with LLM and memory mixins:
+#    cross-bench run -p online -p claude -p evermemos_embedded -b locomo_original
+#    cross-bench run -p online -p no_memory -b humaneval
+#
+#  Prerequisites:
+#    1. export OPENAI_API_KEY="sk-..."
+# =============================================================================
+
+# NOTE: ``execution_mode`` / ``max_agent_steps`` / ``timeout_seconds``
+# intentionally NOT set here. Those are SCAFFOLD decisions that belong
+# in each benchmark's TOML (e.g. ``configs/benchmarks/swebench.toml``
+# sets ``execution_mode = "mini_swe_agent"`` / ``max_agent_steps = 250``;
+# ``configs/benchmarks/locomo_original.toml`` sets
+# ``execution_mode = "conversational"``). The profile only declares
+# **which LLM/embedding** the run uses — orthogonal to scaffold.
+# ``configs/default.toml`` provides the fallback when a benchmark
+# TOML doesn't set its own. This separation was made explicit after
+# 2026-05-21 when a profile setting ``execution_mode = "single_shot"``
+# silently clobbered ``swebench.toml``'s ``mini_swe_agent`` and ran
+# SWE-bench as one-shot patch generation instead of the agentic loop.
+[run]
+tags = ["online", "api"]
+
+[system.llm]
+provider = "openai"
+model = "gpt-4o"
+max_tokens = 4096
+api_key = "${OPENAI_API_KEY}"
+
+[system.embedding]
+provider = "openai"
+model = "text-embedding-3-small"
+api_key = "${OPENAI_API_KEY}"
+
+[system.prompt_strategy]
+type = "zero_shot"

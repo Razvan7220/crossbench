@@ -1,0 +1,63 @@
+# LLM MIXIN: Claude Haiku 4.5 via AWS Bedrock
+#
+# Same model as ``haiku45``, but routed through Bedrock so auth uses
+# the AWS IAM credential chain instead of a static ``ANTHROPIC_API_KEY``.
+# Use this on AWS-hosted runs (ECS task role just works) and any time
+# you want to avoid managing a separate Anthropic billing relationship.
+#
+# Prereqs (one-time):
+#   1. Enable Bedrock access to the Claude Haiku 4.5 model in the AWS
+#      console (https://console.aws.amazon.com/bedrock → Model access).
+#      Approval is usually instant for individual models.
+#   2. Caller IAM principal needs ``bedrock:InvokeModel`` on the
+#      Haiku model ARN.
+#   3. Region must support the model. ``us-east-1`` and ``us-west-2``
+#      have the broadest Anthropic coverage; ``us-east-1`` matches our
+#      ECS cluster so no cross-region latency.
+#
+# Bedrock model id naming differs from Anthropic direct-API ids:
+#   direct API:  claude-haiku-4-5-20251001
+#   Bedrock:     anthropic.claude-haiku-4-5-20251001-v1:0
+# Use the regional ``us.`` prefix to get cross-region inference profile
+# routing (better latency / throughput); use the bare ``anthropic.``
+# id for single-region invocation.
+#
+# Usage:
+#   cross-bench run -b swebench_pro -p haiku45_bedrock -p no_memory \
+#                   --task-id ... --db-url none
+#
+# No ANTHROPIC_API_KEY env var needed — auth is via AWS creds.
+
+[run]
+tags = ["anthropic", "claude-haiku-4-5", "bedrock"]
+
+[system.llm]
+provider = "anthropic_bedrock"
+# Bedrock model id (NOT the Anthropic direct-API name).
+# ``us.`` prefix = cross-region inference profile (recommended).
+model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+temperature = 0.0
+max_tokens = 4096
+context_window = 200_000
+# Region — defaults to AWS_REGION env / boto3 chain when omitted.
+# Pin explicitly so reproductions don't depend on the caller's
+# shell environment.
+aws_region = "us-east-1"
+# Throttling resilience for high-concurrency SWE-bench fan-outs.
+# Bedrock enforces an account-level TPM quota; bursting past it
+# returns 429 ThrottlingException. Without retries a single 429 kills
+# the in-flight agent step and surfaces as a task error. The anthropic
+# SDK uses jittered exponential backoff between attempts. Pair with
+# ``--parallel 10`` (or lower) when you see sustained 429s in
+# CloudWatch ``EstimatedTPMQuotaUsage``; raise once usage is < 70%.
+#
+# This is the documented exception to the workflow.md "zero retries"
+# rule (which targets OpenAI / Anthropic-direct / GenericOpenAI). The
+# bedrock driver defaults stay at ``max_retries = 0``; this profile
+# opts in explicitly.
+request_timeout = 180
+max_retries = 10
+# NOTE: seed intentionally NOT set. The underlying Anthropic Messages
+# API (which Bedrock proxies) rejects ``seed`` with 400. See the
+# anthropic_driver / anthropic_bedrock_driver source for the regression
+# note. Use temperature=0 + multiple reruns for variance management.

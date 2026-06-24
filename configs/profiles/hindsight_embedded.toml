@@ -1,0 +1,24 @@
+# MEMORY MIXIN: Hindsight memory (4-link graph, 4-way retrieval, in-process)
+# Stack: -p online -p hindsight_embedded -b locomo_original
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["hindsight", "embedded"]
+
+[system.memory]
+provider = "hindsight_embedded"
+enabled = true
+
+[system.memory.params]
+llm_model = "gpt-4o-mini"
+llm_api_key = "${OPENAI_API_KEY}"
+llm_base_url = "${LLM_BASE_URL:https://api.openai.com/v1}"
+embedding_model = "all-MiniLM-L6-v2"
+retrieval_limit = 10
+user_id = "bench_user"
+use_reflect = false
+consolidation_threshold = 20
+semantic_threshold = 0.7
+temporal_window_days = 7
+entity_merge_threshold = 0.6

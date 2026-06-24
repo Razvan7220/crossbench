@@ -1,0 +1,18 @@
+# BENCHMARK MIXIN: cap mini-SWE-agent at 100 steps per task.
+#
+# Stack with -b swebench / swebench_pro and any memory profile:
+#   cross-bench run -b swebench_pro -p haiku45_bedrock -p no_memory \
+#                   -p swebench_steps_100 --task-id ...
+#
+# Why this is in a profile (not a benchmark TOML override): step caps
+# are an ablation lever in step-budget experiments — operators want
+# to sweep 100/150/200/250 without editing the benchmark TOML each
+# time. Naming starts with ``swebench_`` so the
+# ``test_builtin_profiles_must_not_set_scaffold_run_keys`` carve-out
+# fires (max_agent_steps is allowed only for benchmark-prefixed
+# profiles). ``execution_mode`` and ``timeout_seconds`` stay locked
+# — those genuinely belong to the scaffold layer.
+
+[run]
+max_agent_steps = 100
+tags = ["swebench-steps-100"]

@@ -1,0 +1,26 @@
+# SWE-bench Verified — gold-patch harness sanity check.
+#
+# Skips the agent loop and evaluates each row's dataset ``patch`` field
+# (``task.ground_truth``) through the Princeton ``swebench`` harness.
+# Expect high (ideally ~100%) ``resolved`` if images and grading match
+# upstream — sub-100% may indicate image drift, stale per-instance
+# scripts, or harness mismatch (not model performance).
+#
+# Usage:
+#   cross-bench run -b swebench_gold -p swebench_gold \
+#                   --task-id django__django-11099 --db-url none
+#
+#   cross-bench run -b swebench_gold -p online -p no_memory \
+#                   --limit 5 --db-url none
+#
+# See deviations.md S22 (gold eval). For SWE-bench Pro, use
+# ``-b swebench_pro_gold`` instead.
+[run]
+benchmark = "swebench"
+execution_mode = "gold_eval"
+timeout_seconds = 3600
+
+[benchmark]
+variant = "verified"
+include_hints = false
+retrieval = "none"

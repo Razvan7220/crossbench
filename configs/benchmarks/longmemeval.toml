@@ -1,0 +1,49 @@
+# LongMemEval — faithful port of xiaowu0162/LongMemEval (ICLR 2025)
+#
+# 500 manually curated questions across six abilities:
+#   single-session-user, single-session-assistant, single-session-preference,
+#   multi-session, temporal-reasoning, knowledge-update
+# Questions ending in ``_abs`` are abstention cases.
+#
+# Judge: upstream src/evaluation/evaluate_qa.py — single call, temperature=0,
+# max_tokens=10, label = "yes" in response.lower(). Default model is gpt-4o
+# (alias resolved to gpt-4o-2024-08-06, the pinned version in upstream's
+# model_zoo).
+#
+# Data: https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned
+
+[run]
+execution_mode = "conversational"
+timeout_seconds = 600
+
+[benchmark]
+# "oracle" | "s" | "m"
+#   oracle → longmemeval_oracle.json (only evidence sessions — smallest, fastest)
+#   s      → longmemeval_s_cleaned.json (~115k tokens, ~40 sessions per question)
+#   m      → longmemeval_m_cleaned.json (~500 sessions per question)
+variant = "oracle"
+
+# Local cache directory. The JSON file is downloaded from HuggingFace on first
+# use and looked up by variant-specific filename within this directory.
+data_path = "data/longmemeval"
+
+# Optional: restrict to / exclude specific question_types. Values must be
+# drawn from the upstream set:
+#   single-session-user, single-session-assistant, single-session-preference,
+#   multi-session, temporal-reasoning, knowledge-update
+filter_question_types = []
+
+# If true, only abstention questions (question_id ending in "_abs") are run.
+only_abstention = false
+
+# limit = 50
+
+[benchmark.judge]
+# Must be an alias known to upstream model_zoo (gpt-4o, gpt-4o-mini,
+# llama-3.1-70b-instruct) or a literal model id for OpenAI-compatible servers.
+model = "gpt-4o"
+api_key = "${OPENAI_API_KEY}"
+# Leave blank for the OpenAI default. For vLLM-served judges set base_url to
+# the OpenAI-compatible endpoint (e.g. http://localhost:8001/v1).
+base_url = ""
+organization = "${OPENAI_ORGANIZATION:}"

@@ -1,0 +1,16 @@
+# SWE-bench Pro gold-eval convenience profile.
+#
+# Stack with the gold benchmark TOML (no LLM calls; memory disabled):
+#   cross-bench run -b swebench_pro_gold -p swebench_pro_gold \
+#                   --task-id instance_flipt-io__flipt-2eac... \
+#                   --db-url none
+#
+# The benchmark TOML sets ``execution_mode = "gold_eval"``. This profile
+# only tags the run and disables memory.
+
+[run]
+tags = ["gold-eval", "harness-sanity", "swebench-pro"]
+
+[system.memory]
+provider = ""
+enabled = false

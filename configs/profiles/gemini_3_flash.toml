@@ -1,0 +1,54 @@
+# LLM MIXIN: Google Gemini 3 Flash
+#
+# Stack with the SEAL benchmark + no_memory baseline:
+#   cross-bench run -b swebench_pro_seal -p gemini_3_flash -p no_memory \
+#                   -n 5 --db-url none
+#
+# **SEAL routing.** The SEAL scaffold subprocess-invokes ``python -m
+# sweagent run-batch``; the model name is passed via
+# ``--agent.model.name`` to SWE-agent's LiteLLM layer, NOT through
+# CrossBench's ``LLMDriver``. This profile sets
+# ``[benchmark] seal_model_name`` so SEAL picks Gemini up; the
+# ``[system.llm]`` block below is set but **unused** on SEAL runs
+# (the scaffold deliberately bypasses ``LLMDriver`` — see
+# deviations.md S23). The bench-LLM block is kept here so that if the
+# profile is ever stacked with a non-SEAL benchmark (e.g.
+# ``-b locomo_original``), the config is still schema-valid.
+#
+# **Credentials.** SWE-agent's Gemini provider reads ``GEMINI_API_KEY``
+# from the process env. On a local laptop, ``export GEMINI_API_KEY=...``
+# before invoking ``cross-bench run``. On AWS ECS, pass the key via the
+# task's ``containerOverrides.environment`` block at dispatch time —
+# the orchestrator task definition does not yet ship ``GEMINI_API_KEY``
+# as a managed secret (only ``OPENAI_API_KEY`` is plumbed via SSM today).
+#
+# **Model name.** Pinned literal as supplied — operators upgrading to
+# a stable Gemini 3 release should bump the snapshot here.
+
+[run]
+tags = ["google", "gemini-3-flash"]
+
+[benchmark]
+# Overrides ``swebench_pro_seal.toml``'s default
+# ``seal_model_name = "anthropic/claude-3-7-sonnet-20250219"``.
+# LiteLLM resolves ``gemini/<model>`` against the Gemini API; see
+# https://docs.litellm.ai/docs/providers/gemini for the exact
+# ``GEMINI_API_KEY`` env-var contract.
+seal_model_name = "gemini/gemini-3-flash"
+
+# Bench-side LLM config — unused under SEAL but needs to be
+# schema-valid in case the profile is stacked with a non-SEAL
+# benchmark. We point at the OpenAI-compatible Gemini endpoint so
+# CrossBench's ``generic_openai`` driver can resolve it if ever
+# routed through. Real Gemini routing for non-SEAL benchmarks would
+# require an actual Gemini ``LLMDriver`` — out of scope here.
+[system.llm]
+provider = "generic_openai"
+model = "gemini-3-flash"
+temperature = 0.0
+max_tokens = 4096
+# Gemini 3 Flash's context window per Google's documentation. Update
+# if Google revises it.
+context_window = 1_000_000
+api_key = "${GEMINI_API_KEY}"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"

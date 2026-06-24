@@ -1,0 +1,41 @@
+# SCAFFOLD MIXIN: Anthropic/Bedrock prompt caching for the SEAL scaffold
+#
+# Stack AFTER a SEAL model profile to enable prompt caching in the
+# sweagent subprocess:
+#
+#   cross-bench run -b swebench_pro_seal -p seal_haiku45 -p seal_prompt_caching \
+#                   -n 5 --db-url none
+#
+# **What it does.** Flips ``[benchmark] seal_prompt_caching`` on, which
+# makes ``execute_seal`` pass ``configs/seal/cache_control.yaml`` as a
+# second ``--config`` to ``sweagent run-batch``. That overlay enables
+# the pinned SWE-agent's own ``CacheControlHistoryProcessor``: a
+# ``cache_control: {type: ephemeral}`` mark on the last 2 user/tool
+# messages of every LLM call, forwarded by LiteLLM to Anthropic /
+# Bedrock.
+#
+# **Why.** SEAL agent steps re-send the entire conversation each call
+# (~49k fresh input tokens/call measured June 2026). On Bedrock that
+# saturates the account's 5M tokens-per-minute Haiku 4.5 quota at only
+# ~100 calls/min (~20-40 concurrent tasks) — the June 9-10 and May 26-27
+# throttling incidents (1.3k-9.1k ThrottlingExceptions/day). Bedrock
+# does NOT count cache READS against the TPM quota (only cache writes +
+# fresh tokens), so caching cuts per-step quota burn to roughly the
+# newest exchange (~3-6k tokens) — an ~8-15x lift in sustainable
+# concurrency at the same quota, plus ~70-85% input-cost reduction and
+# lower time-to-first-token.
+#
+# **Comparability (deviations.md S26 — read before publishing).** Cells
+# produced with this mixin are NOT byte-comparable to Scale's public
+# SWE-bench Pro leaderboard config: the request payloads differ (cache
+# marks), throttling/latency dynamics differ (fewer 429-retry stalls
+# inside the 3600s subprocess timeout), and ``usage.input_tokens``
+# stops counting the cached prefix. Anthropic documents caching as
+# output-neutral. Every evaluation row carries
+# ``prompt_caching_enabled: true/false`` so consumers can bucket cells;
+# the flag reflects whether the overlay was ACTUALLY wired in, not the
+# intent. Default (without this mixin) stays off — the
+# leaderboard-comparable cell is unchanged.
+
+[benchmark]
+seal_prompt_caching = true

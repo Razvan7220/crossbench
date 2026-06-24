@@ -1,0 +1,9 @@
+# MEMORY MIXIN: disable memory
+# Stack after a base profile: -p online -p no_memory
+
+[run]
+tags = ["baseline", "no-memory"]
+
+[system.memory]
+provider = ""
+enabled = false

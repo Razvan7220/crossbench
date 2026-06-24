@@ -1,0 +1,20 @@
+# CrossCodeEval — cross-file line completion (Ding et al., NeurIPS 2023)
+# https://github.com/amazon-science/cceval
+#
+# Data is loaded from ZHENGRAN/cross_code_eval_<language> on the HuggingFace
+# Hub (the historical Fsoft-AIC/CrossCodeEval path does not exist).
+#
+# language:          python | java | csharp | typescript
+# retrieval_setting: retrieval           (RG1 — pre-retrieved cross-file chunks)
+#                    retrieval-with-ref  (oracle / RGwRef — retrieval augmented
+#                                         with ground-truth file)
+#                    none                (baseline — no cross-file context)
+
+[run]
+benchmark = "crosscodeeval"
+timeout_seconds = 60
+
+[benchmark]
+language = "python"
+retrieval_setting = "retrieval"
+synthetic_workspace_dir = "tmp"

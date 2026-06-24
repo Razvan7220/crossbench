@@ -1,0 +1,27 @@
+# MEMORY MIXIN: EverMemOS embedded (full lifecycle, no external server)
+# Stack: -p online -p evermemos_embedded -b locomo_original
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["evermemos_embedded"]
+
+[system.memory]
+provider = "evermemos_embedded"
+enabled = true
+
+[system.memory.params]
+llm_model = "gpt-4.1-mini"
+llm_api_key = "${OPENAI_API_KEY}"
+llm_base_url = "${LLM_BASE_URL:https://api.openai.com/v1}"
+embedding_model = "text-embedding-3-small"
+retrieve_method = "agentic"
+retrieval_limit = 10
+user_id = "bench_user"
+hard_token_limit = 65536
+hard_message_limit = 500
+similarity_threshold = 0.65
+max_time_gap_seconds = 604800
+enable_foresight = "false"
+enable_event_log = "true"
+enable_clustering = "true"

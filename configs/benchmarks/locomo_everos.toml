@@ -1,0 +1,79 @@
+# LoCoMo (EverOS-style) — methodology-faithful port of
+# EverMind-AI/EverOS methods/evermemos/evaluation.
+#
+# This is the *Mem0-lineage* LoCoMo evaluator: LLM-as-judge with a 7-rule
+# partial-credit prompt (14-day date slop, 50% duration tolerance),
+# 3-run mean+/-std aggregation, synthetic 30-second-per-turn timestamps,
+# per-system answer prompts, and category 5 (adversarial) excluded by
+# default.
+#
+# Use this when benchmarking memory backends that need per-event
+# timestamps (Zep, MemoryOS) or when producing numbers comparable to
+# EverOS / mem0ai leaderboards.
+#
+# For byte-exact paper-faithful evaluation (Porter-stemmed F1, all five
+# categories, upstream prompts including the "wriiten" typo) use the
+# sibling benchmark ``locomo_original``.
+#
+# References:
+#   * https://github.com/EverMind-AI/EverOS/tree/main/methods/evermemos/evaluation
+#   * https://github.com/mem0ai/memory-benchmarks
+#   * https://github.com/snap-research/locomo (dataset source — same as
+#     locomo_original)
+
+[run]
+execution_mode = "conversational"
+timeout_seconds = 600
+
+[benchmark]
+# Local cache dir. On first run the adapter downloads
+# ``locomo10.json`` (~2.8 MB) from GitHub into this directory. Shared with
+# the ``locomo_original`` benchmark so a single cached copy serves both.
+data_path = "data/locomo"
+
+# Optional: explicit JSON path, bypasses ``data_path`` resolution.
+# file_path = "/path/to/locomo10.json"
+
+# EverOS default: exclude adversarial (category 5) — matches
+# ``filter_category: [5]`` in EverOS's shipped configs and mem0ai's
+# ``CATEGORIES_TO_EVALUATE = [1,2,3,4]``.
+filter_categories = [5]
+
+# Optional: cap the number of Tasks emitted.
+# limit = 50
+
+# Per-system answer prompt. Must be one of: "mem0", "memos", "cot", "zep".
+# * mem0  — default; mem0 retrieval format (bullet list of memories)
+# * memos — MemoryOS; two-tier working/long-term memory format
+# * cot   — Chain-of-Thought baseline with full conversation history
+# * zep   — Zep knowledge-graph format (facts + episodes)
+system = "mem0"
+
+# Number of independent judge runs for mean+/-std aggregation.
+# EverOS default is 3.
+num_runs = 3
+
+[benchmark.timestamp]
+# EverOS's ``methods/evermemos/evaluation/src/core/loaders.py`` synthesizes
+# per-turn timestamps by anchoring at this datetime and incrementing by
+# ``interval_seconds`` per turn within a session. Each subsequent session
+# starts one calendar day later on the synthetic timeline.
+#
+# This exists because LoCoMo's dataset only ships per-session dates
+# (``session_N_date_time``), not per-turn timestamps — but memory
+# backends like Zep and MemoryOS index by event time and need them.
+baseline = "2024-01-01T00:00:00"
+interval_seconds = 30
+
+[benchmark.judge]
+# LLM-as-judge configuration. Passes through to
+# ``cross_bench.benchmarks.llm_judge.llm_judge`` which handles OpenAI,
+# Anthropic, Google, and OpenAI-compatible endpoints.
+provider = "openai"
+model = "gpt-4o-mini"
+
+# Leave empty to read from ``OPENAI_API_KEY`` / ``ANTHROPIC_API_KEY`` /
+# ``GOOGLE_API_KEY`` env var. Override via ``--judge-api-key`` CLI flag
+# or a profile.
+api_key = ""
+base_url = "https://api.openai.com/v1"

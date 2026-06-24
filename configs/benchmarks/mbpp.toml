@@ -1,0 +1,9 @@
+[run]
+benchmark = "mbpp"
+timeout_seconds = 30
+
+[benchmark]
+# No params required. Dataset (sanitized/test, pinned revision) and 3-shot
+# few-shot source (full/prompt, task_ids=[2,3,4]) are fixed to match
+# inspect_evals MBPP. Set `limit` for smoke runs.
+# limit = 10

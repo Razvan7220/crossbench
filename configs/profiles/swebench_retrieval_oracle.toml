@@ -1,0 +1,16 @@
+# BENCHMARK MIXIN: switch SWE-bench to the Oracle-retrieval column.
+#
+# Stack: -p online -p swebench_retrieval_oracle -b swebench
+#
+# Pulls each task's Oracle-augmented prompt from upstream's pre-computed
+# ``princeton-nlp/SWE-bench_oracle`` HuggingFace dataset (the gold
+# modified files for each instance, included verbatim). The retrieval
+# block is injected as a ``Retrieved files (oracle)`` section before
+# the issue description.
+#
+# CEILING column — used as the "if retrieval were perfect" reference,
+# NOT for headline leaderboard comparisons. The model only has to
+# write the diff, not find the right file. See deviations.md S3.
+
+[benchmark]
+retrieval = "oracle"

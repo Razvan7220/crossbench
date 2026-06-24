@@ -1,0 +1,5 @@
+# BENCHMARK MIXIN: cap mini-SWE-agent at 150 steps per task.
+# See swebench_steps_100.toml for the rationale + convention carve-out.
+[run]
+max_agent_steps = 150
+tags = ["swebench-steps-150"]

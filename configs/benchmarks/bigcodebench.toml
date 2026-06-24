@@ -1,0 +1,11 @@
+[run]
+benchmark = "bigcodebench"
+timeout_seconds = 30
+
+[benchmark]
+# "complete" (function signature + docstring, prefixed with INSTRUCTION_PROMPT)
+# or "instruct" (natural-language task description).
+variant = "complete"
+# Dataset version split. v0.1.2 matches inspect_evals' pinned revision.
+version = "v0.1.2"
+# limit = 10  # for smoke runs

@@ -1,0 +1,27 @@
+# MEMORY-INTERNAL OVERRIDE: pin mem0's internal fact-extraction LLM to
+# gpt-4o-mini regardless of which bench LLM was chosen upstream.
+#
+# By default an embedded memory profile inherits its internal LLM /
+# embedder choice from the bench-LLM profile (see
+# ``cross_bench/config.py::_inherit_bench_llm_into_memory``). Stack
+# this mixin AFTER the memory profile to diverge:
+#
+#   cross-bench run -p online -p mem0v2_embedded -p mem_internal_gpt4o_mini ...
+#                                ^^^^^^^^^^^^^^^^ inherits gpt-4o
+#                                                  ^^^^^^^^^^^^^^^^^^^^^^^^ overrides to gpt-4o-mini
+#
+# Use cases:
+#   - Run the bench against gpt-4o for answer quality, but extract
+#     facts with a cheaper model so per-conversation ingestion cost
+#     stays low.
+#   - Compare two memory configurations on the same answer model.
+#
+# Pairs with mem0v1_embedded / mem0v2_embedded. For evermemos the
+# corresponding mixin would set ``[system.memory.params] llm_model``
+# instead.
+
+[system.memory]
+llm_provider = "openai"
+llm_model = "gpt-4o-mini"
+embedder_provider = "openai"
+embedder_model = "text-embedding-3-small"

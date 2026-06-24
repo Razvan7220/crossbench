@@ -1,0 +1,59 @@
+# LoCoMo — faithful port of snap-research/locomo
+# ("Evaluating Very Long-Term Conversational Memory of LLM Agents",
+#  Maharana et al., ACL 2024, arXiv 2402.17753)
+#
+# 10 human-annotated conversations, ~200 QA pairs each, across five
+# reasoning types defined in the paper and encoded as integer categories
+# on every ``qa`` item:
+#
+#   1 = multi_hop       — multi-answer F1 (comma-split, stemmed)
+#   2 = temporal        — single F1 + date hint appended to the question
+#   3 = commonsense     — single F1, ground truth pre-split on ';'
+#   4 = single_hop      — single F1
+#   5 = adversarial     — substring check for "no information available"
+#                         or "not mentioned" in the response
+#
+# Evaluation mirrors ``task_eval/evaluation.py::eval_question_answering``:
+#   * Porter-stemmed, article-stripped (``a|an|the|and``), punctuation-free
+#     F1 on the model's response vs. the golden answer.
+#   * Category 5 uses substring-match abstention, not F1.
+#   * We threshold F1 at 0.5 to produce a ``pass`` flag; the raw F1 is also
+#     surfaced for aggregation.
+#
+# Dataset: https://github.com/snap-research/locomo/blob/main/data/locomo10.json
+# (downloaded on first use into ``data_path`` below).
+
+[run]
+execution_mode = "conversational"
+timeout_seconds = 600
+
+[benchmark]
+# Local cache dir. On first run the adapter downloads
+# ``locomo10.json`` (~2.8 MB) from GitHub into this directory.
+data_path = "data/locomo"
+
+# Optional: provide an explicit path to the JSON file, bypassing
+# ``data_path`` resolution entirely. Useful for offline / fixture-based runs.
+# file_path = "/path/to/locomo10.json"
+
+# Optional: restrict to a subset of categories. Any integer drawn from
+# 1..5; see the table at the top of this file.
+# filter_categories = [5]   # skip adversarial
+# filter_categories = [1, 2]  # only multi-hop + temporal
+
+# Optional: cap the number of Tasks emitted (useful for smoke tests).
+# limit = 50
+
+# Prompt style fed to the reader model:
+#   * "question"     — just the category-rewritten question (default).
+#                      Memory systems retrieve their own context.
+#   * "full_history" — upstream's byte-exact
+#                      ``CONV_START_PROMPT + query_conv + QA_PROMPT`` prompt
+#                      for long-context baselines.
+prompt_style = "question"
+
+[benchmark.judge]
+# Upstream does NOT use an LLM judge — it uses Porter-stemmed F1.
+# ``f1_threshold`` controls the ``pass`` boolean (raw F1 is always
+# reported). Category 5 ignores this threshold and grades exactly.
+f1_threshold = 0.5

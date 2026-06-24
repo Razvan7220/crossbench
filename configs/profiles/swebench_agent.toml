@@ -1,0 +1,19 @@
+# =============================================================================
+#  MIXIN: swebench_agent
+# =============================================================================
+#  Convenience tag for SWE-bench agent runs.
+#
+#  NOTE: The scaffold keys (execution_mode, max_agent_steps,
+#  timeout_seconds) live in configs/benchmarks/swebench.toml — NOT here.
+#  Profiles must not set scaffold keys (locked by
+#  test_builtin_profiles_must_not_set_scaffold_run_keys).
+#  ``online.toml`` and ``local.toml`` no longer set execution_mode, so
+#  the swebench.toml benchmark TOML wins by construction.
+#
+#  Usage:
+#    cross-bench run -b swebench -p online -p mem0v2_embedded -p swebench_agent -n 5
+#    cross-bench run -b swebench -p online -p no_memory -p swebench_agent -n 5
+# =============================================================================
+
+[run]
+tags = ["swebench", "agent"]

@@ -1,0 +1,10 @@
+# BENCHMARK MIXIN: switch CrossCodeEval to the C# split.
+#
+# Stack: -p online -p <memory> -p crosscodeeval_csharp -b crosscodeeval
+#
+# Overrides the default ``[benchmark] language = "python"`` from
+# ``configs/benchmarks/crosscodeeval.toml``. Pulls C# tasks from
+# ``ZHENGRAN/cross_code_eval_csharp`` on the HuggingFace Hub.
+
+[benchmark]
+language = "csharp"

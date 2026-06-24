@@ -1,0 +1,49 @@
+# SCAFFOLD MIXIN: nudge SWE-agent toward `str_replace_editor str_replace`
+# for source edits + REMOVE-vs-FLIP discipline for attribute/default fixes.
+#
+# Stack on top of any SEAL profile to enable:
+#
+#   cross-bench run -b swebench_pro_seal \
+#       -p online -p seal_haiku45_direct_temp1 -p seal_full_trace \
+#       -p seal_str_replace_nudge \
+#       --task-set 8 --reruns 3 \
+#       --extra-env ANTHROPIC_API_KEY=...
+#
+# **What this enables.** Flips ``[benchmark] seal_str_replace_nudge =
+# true``, which makes ``execute_seal`` pass
+# ``configs/seal/str_replace_nudge.yaml`` as an additional
+# ``--config`` to ``sweagent run-batch`` (after the pinned
+# ``tool_use.yaml`` and after the optional caching overlay if also
+# enabled). The overlay REPLACES Scale's one-line system template
+# with an extended version that:
+#
+# 1. Biases tool selection toward ``str_replace_editor str_replace``
+#    for source edits and ``view`` (with line ranges) for inspection,
+#    reserving ``bash`` for navigation / tests.
+# 2. Adds explicit "REMOVE the line, don't flip the value" guidance
+#    for class-attribute / config-default fixes — the exact failure
+#    mode caught on Set 8 task ``ansible-1a4644ff`` where the model
+#    flipped ``allow_extras = True`` → ``False`` instead of removing
+#    the attribute as the test expected.
+#
+# **Why this profile exists.** Cohort comparison across 4 CrossBench
+# config cells on Set 8 (Bedrock+caching ×2, Bedrock-no-cache,
+# Anthropic-direct-no-cache) all average ~0 ``str_replace`` uses per
+# task while Scale's published Pro runs average ~6.8/task on the
+# same instances. The tool-selection divergence persists across
+# every routing path we control, suggesting Scale's internal LiteLLM
+# proxy injects something behaviorally we can't replicate. This
+# overlay is the lowest-cost compensation: an explicit system-prompt
+# rider that shifts the model's tool prior.
+#
+# **Comparability.** Cells with this mixin are NOT byte-comparable
+# to Scale's published Pro leaderboard config (system template
+# differs). They ARE comparable to same-commit cells run without
+# the mixin. Every evaluation row carries
+# ``str_replace_nudge_enabled: true/false`` for bucketing.
+
+[run]
+tags = ["str-replace-nudge", "tool-selection-bias"]
+
+[benchmark]
+seal_str_replace_nudge = true

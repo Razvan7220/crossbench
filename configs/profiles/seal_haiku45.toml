@@ -1,0 +1,87 @@
+# LLM MIXIN: SEAL scaffold + Claude Haiku 4.5 via AWS Bedrock
+#
+# Stack with the SEAL benchmark + no_memory baseline:
+#   cross-bench run -b swebench_pro_seal -p seal_haiku45 -p no_memory \
+#                   -n 5 --db-url none
+#
+# **Difference from ``haiku45_bedrock.toml``.** That profile only sets
+# the bench LLM (CrossBench's ``LLMDriver``); the BENCH LLM is
+# **unused under SEAL** (deviations.md S23). This profile additionally
+# sets ``[benchmark] seal_model_name``, which is what the scaffold
+# passes to ``sweagent``'s LiteLLM layer via ``--agent.model.name``.
+# Stack this profile alone (``-p seal_haiku45``) on SEAL benchmarks —
+# no need to ALSO add ``-p haiku45_bedrock``.
+#
+# **Why Bedrock over the direct Anthropic API.** Auth uses the AWS IAM
+# credential chain instead of a static ``ANTHROPIC_API_KEY``. On
+# AWS-hosted runs the ECS task role just works (verified:
+# ``AmazonBedrockLimitedAccess`` is already attached to
+# ``cross-bench-dev-task-role``). No SSM plumbing or per-dispatch
+# ``--overrides`` env block needed.
+#
+# **Snapshot pin.** ``claude-haiku-4-5-20251001`` is the same exact
+# snapshot ``haiku45_bedrock.toml`` uses, kept in lockstep so the
+# leaderboard row "SWE-bench Pro × SEAL × Haiku 4.5" matches the prior
+# "SWE-bench Pro × mini-swe-agent × Haiku 4.5" cell on model identity
+# — the only axis varying is the scaffold (deviations.md S21 vs S23).
+#
+# **Bedrock model id naming.** LiteLLM Bedrock format is
+# ``bedrock/<model_id>``; the ``us.`` prefix selects the cross-region
+# inference profile (better latency / throughput vs single-region
+# invocation). The Bedrock id format
+# (``anthropic.claude-haiku-4-5-20251001-v1:0``) differs from the
+# Anthropic direct-API id (``claude-haiku-4-5-20251001``).
+#
+# **Prereqs (one-time, already done on cross-bench-dev account).**
+#   1. Bedrock access enabled for Claude Haiku 4.5 in
+#      https://console.aws.amazon.com/bedrock → Model access.
+#   2. Task role has ``bedrock:InvokeModel`` (via
+#      ``AmazonBedrockLimitedAccess`` managed policy).
+#   3. Region supports the model: ``us-east-1`` (matches cluster).
+
+[run]
+tags = ["anthropic", "claude-haiku-4-5", "bedrock", "seal-scaffold"]
+
+[benchmark]
+# Overrides ``swebench_pro_seal.toml``'s default
+# ``seal_model_name = "anthropic/claude-3-7-sonnet-20250219"``.
+# LiteLLM's Bedrock provider uses boto3, which picks up AWS creds from
+# the standard credential chain (ECS task role, env vars,
+# ~/.aws/credentials). No API key needed in this string.
+seal_model_name = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+# Pass the AWS region to sweagent's LiteLLM Bedrock call. LiteLLM
+# reads ``AWS_REGION`` from env when not specified, but pinning it
+# here makes the reproduction independent of the caller's shell.
+#
+# ``max_output_tokens=1024``: caps response at 1024 tokens. Mean
+# observed output is ~40 tok/step (set-4 ablation, 2026-06-09 →
+# 2026-06-11), so 1024 = ~25× headroom over real usage. This drops
+# the per-call Bedrock output-TPM reservation footprint vs sweagent's
+# litellm default (8192 for Haiku 4.5 / 64000 for Claude 3.7+4
+# Sonnet per ``third_party/swe_agent/sweagent/agent/models.py:586-594``).
+# If Bedrock pre-reserves output TPM against ``max_tokens`` (the
+# observed-but-undocumented behavior our colleague flagged), this
+# unlocks ~8× more concurrent shards on Haiku 4.5 before throttling.
+# No risk to in-flight tasks at deploy time — ECS only loads images
+# at task launch, so running tasks keep their original cap.
+seal_extra_args = [
+    "--agent.model.api_base=https://bedrock-runtime.us-east-1.amazonaws.com",
+    "--agent.model.max_output_tokens=1024",
+]
+
+# Bench-LLM block — unused under SEAL by design (S23), but kept
+# schema-valid so the profile composes with non-SEAL benchmarks if
+# ever stacked there. Pinned to the same Bedrock snapshot.
+[system.llm]
+provider = "anthropic_bedrock"
+model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+temperature = 0.0
+max_tokens = 4096
+context_window = 200_000
+aws_region = "us-east-1"
+# Bedrock throttling resilience (matches ``haiku45_bedrock.toml``).
+# The Anthropic SDK uses jittered exponential backoff; this is the
+# documented exception to the workflow.md "zero retries" rule.
+request_timeout = 180
+max_retries = 10

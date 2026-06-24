@@ -1,0 +1,17 @@
+[run]
+benchmark = "terminalbench"
+execution_mode = "agentic"
+timeout_seconds = 300
+max_agent_steps = 25
+
+[benchmark]
+# Upstream-provided dataset. The package caches tasks under
+# ~/.cache/terminal-bench/<name>/<version> on first load; subsequent runs
+# hit the cache. Override with `data_dir` for a pinned local path.
+dataset_name = "terminal-bench-core"
+dataset_version = "head"
+
+# data_dir = "data/terminal-bench"
+# task_ids = ["hello-world", "fix-permissions"]
+# n_tasks = 10
+# exclude_task_ids = []

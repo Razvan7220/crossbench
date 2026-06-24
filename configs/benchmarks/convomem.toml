@@ -1,0 +1,60 @@
+# ConvoMem — faithful port of SalesforceAIResearch/ConvoMem
+# (arxiv 2511.10523, HF dataset Salesforce/ConvoMem).
+#
+# 75,336 curated Q&A pairs across six evidence categories:
+#   user_evidence, assistant_facts_evidence, changing_evidence,
+#   abstention_evidence, preference_evidence, implicit_connection_evidence
+#
+# Per-category judge, routed to the matching upstream AnsweringEvaluation:
+#   * user_evidence            -> UserFactsAnsweringEvaluation (1- vs multi-evidence)
+#   * assistant_facts_evidence -> DefaultAnsweringEvaluation
+#   * changing_evidence        -> DefaultAnsweringEvaluation
+#   * preference_evidence      -> RubricBasedAnsweringEvaluation
+#   * implicit_connection_evidence -> RubricBasedAnsweringEvaluation
+#   * abstention_evidence      -> AbstentionAnsweringEvaluation
+#
+# Judge protocol mirrors EvaluationUtils.verifyAnswerCorrectnessWithPrompt:
+#   temperature=0, parse lower-cased response for "right"/"wrong", retry on
+#   invalid responses up to max_retries. Upstream default is Gemini.flash
+#   (gemini-2.5-flash) with max_retries=20.
+#
+# Data: https://huggingface.co/datasets/Salesforce/ConvoMem
+
+[run]
+execution_mode = "conversational"
+timeout_seconds = 600
+
+[benchmark]
+# Local cache dir. The dataset is downloaded from HuggingFace on first use;
+# files are looked up under:
+#   {data_path}/core_benchmark/evidence_questions/<category>/<k>_evidence/*.json
+data_path = "data/convomem"
+
+# Optional: restrict to / exclude specific categories. Values must be drawn
+# from the upstream set listed above.
+# filter_categories = ["abstention_evidence"]
+
+# Optional: restrict to specific evidence counts (1-6 depending on category).
+# filter_evidence_counts = [1, 2]
+
+# Optional: restrict traversal to a subset up front (skips loading files for
+# excluded categories / k's).
+# categories = ["user_evidence", "preference_evidence"]
+# evidence_counts = [1, 2, 3]
+
+# limit = 50
+
+[benchmark.judge]
+# Default matches upstream's Gemini.flash pin.
+provider = "google"
+model = "gemini-2.5-flash"
+api_key = "${GOOGLE_AI_API_KEY:}"
+# Config.Evaluation.ANSWER_VERIFICATION_MAX_RETRIES
+max_retries = 20
+
+# To run the judge through OpenAI / Anthropic instead:
+# provider = "openai"
+# model = "gpt-4o-2024-08-06"
+# api_key = "${OPENAI_API_KEY}"
+# base_url = ""
+# organization = "${OPENAI_ORGANIZATION:}"

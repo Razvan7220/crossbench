@@ -1,0 +1,56 @@
+# MEMORY MIXIN: RAG baseline (chunking + BM25 + vector hybrid retrieval)
+#
+# Stack: -p online -p rag -b locomo_original
+#
+# A non-memory baseline. NO LLM-based fact extraction, NO consolidation,
+# NO algorithmic memory layer — just chunk the raw conversation, embed
+# each chunk, and at query time retrieve the top-k chunks via a hybrid
+# BM25 + vector score. The bench LLM (gpt-4o via ``online.toml``)
+# receives the retrieved chunks as context and produces the answer.
+#
+# This is the simplest possible "memory" pipeline. Any real memory
+# system should outperform it on conversational tasks; if it doesn't,
+# the fancy memory algorithm isn't earning its complexity. That's the
+# whole point of having a baseline column on the leaderboard.
+#
+# Reference (MemoryBench's RAG provider):
+#   https://github.com/supermemoryai/memorybench
+#
+# Embedder is OpenAI ``text-embedding-3-small`` by default — the same
+# embedder the ``online`` base profile uses for the bench, so chunks
+# and query share an embedding space without surprises. Override
+# ``embedding_model`` / ``embedding_api_key`` if you need to point at
+# a different endpoint (e.g. a local embedder via Ollama).
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["rag", "baseline"]
+
+[system.memory]
+provider = "rag"
+enabled = true
+
+[system.memory.params]
+# Chunking: 400 tokens with 50-token overlap matches MemoryBench's
+# default for conversational benchmarks. Smaller chunks → more
+# fine-grained retrieval but more chunks to embed; 400 is a sane
+# midpoint.
+chunk_size = 400
+chunk_overlap = 50
+
+# Hybrid scoring: 70% vector cosine + 30% BM25 (MemoryBench default).
+vector_weight = 0.7
+bm25_weight = 0.3
+
+# top_k = 20 matches the EverOS evaluation convention used by mem0v2
+# and evermemos so retrieval breadth is comparable across memory
+# systems on the leaderboard. NOTE: 20 *chunks* is not 20 *memories*;
+# chunks are smaller and atomic. Apples-to-apples on count, not on
+# total token volume — flagged in deviations.md if/when we publish.
+top_k = 20
+
+# OpenAI embedder. ``${OPENAI_API_KEY}`` is set by ECS via SSM in the
+# orchestrator task definition (and by the user's env locally).
+embedding_model = "text-embedding-3-small"
+embedding_api_key = "${OPENAI_API_KEY}"

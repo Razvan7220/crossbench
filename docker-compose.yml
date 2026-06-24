@@ -1,0 +1,113 @@
+services:
+  # -------------------------------------------------------------------------
+  # Core platform services
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cross_bench
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  localstack:
+    image: localstack/localstack:latest
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+
+  # -------------------------------------------------------------------------
+  # Memory system services (all optional — start only what you need)
+  # -------------------------------------------------------------------------
+
+  # --- Zep (self-hosted Community Edition, deprecated but functional) ------
+  # Start with:  docker compose --profile zep up -d
+  zep-db:
+    image: ankane/pgvector:latest
+    profiles: [zep]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zep
+    volumes:
+      - zep_pgdata:/var/lib/postgresql/data
+
+  zep-nlp:
+    image: ghcr.io/getzep/zep-nlp-server:latest
+    profiles: [zep]
+    environment:
+      ENABLE_EMBEDDINGS: "true"
+
+  zep:
+    image: ghcr.io/getzep/zep:latest
+    profiles: [zep]
+    depends_on:
+      - zep-db
+      - zep-nlp
+    ports:
+      - "8000:8000"
+    environment:
+      ZEP_STORE_TYPE: postgres
+      ZEP_STORE_POSTGRES_DSN: postgres://postgres:postgres@zep-db:5432/zep?sslmode=disable
+      ZEP_NLP_SERVER_URL: http://zep-nlp:5557
+      ZEP_EXTRACTORS_DOCUMENTS_EMBEDDINGS_SERVICE: local
+      ZEP_EXTRACTORS_DOCUMENTS_EMBEDDINGS_DIMENSIONS: 768
+      ZEP_EXTRACTORS_MESSAGES_EMBEDDINGS_SERVICE: local
+      ZEP_EXTRACTORS_MESSAGES_EMBEDDINGS_DIMENSIONS: 768
+
+  # --- Letta (self-hosted, bundled Postgres+pgvector) ----------------------
+  # Start with:  docker compose --profile letta up -d
+  letta:
+    image: letta/letta:latest
+    profiles: [letta]
+    ports:
+      - "8283:8283"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - letta_pgdata:/var/lib/postgresql/data
+
+  # --- Qdrant (for Mem0 local vector store, optional) ----------------------
+  # Start with:  docker compose --profile qdrant up -d
+  qdrant:
+    image: qdrant/qdrant:latest
+    profiles: [qdrant]
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # --- Ollama (for fully-local LLM + embeddings, used by Mem0 etc.) --------
+  # Start with:  docker compose --profile ollama up -d
+  # Then:        docker exec ollama ollama pull llama3.1:latest
+  #              docker exec ollama ollama pull nomic-embed-text:latest
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  pgdata:
+  localstack_data:
+  zep_pgdata:
+  letta_pgdata:
+  qdrant_data:
+  ollama_data:
+
+# Fixed name so external compose files can attach with `external: true`.
+networks:
+  default:
+    name: crossbench
+    external: true

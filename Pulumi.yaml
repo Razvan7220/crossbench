@@ -1,0 +1,7 @@
+name: cross-bench
+runtime:
+  name: python
+  options:
+    virtualenv: .venv
+main: src/cross_bench/infra/pulumi
+description: CodCoBench — AWS infrastructure for the modular coding benchmark platform

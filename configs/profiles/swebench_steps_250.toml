@@ -1,0 +1,7 @@
+# BENCHMARK MIXIN: cap mini-SWE-agent at 250 steps per task.
+# Matches the upstream swebench.yaml default — explicit re-affirmation
+# for the ablation table so every cell has a step-cap profile applied.
+# See swebench_steps_100.toml for the rationale + convention carve-out.
+[run]
+max_agent_steps = 250
+tags = ["swebench-steps-250"]

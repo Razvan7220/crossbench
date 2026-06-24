@@ -1,0 +1,27 @@
+# SWE-bench Pro — gold-patch harness sanity check.
+#
+# Skips the agent loop and evaluates each row's dataset ``patch`` field
+# (``task.ground_truth``) through the Scale AI Pro eval harness. Expect
+# high (ideally ~100%) ``resolved`` if images, scripts, and grading match
+# upstream.
+#
+# Usage:
+#   cross-bench run -b swebench_pro_gold -p swebench_pro_gold \
+#                   --task-id instance_flipt-io__flipt-2eac... \
+#                   --db-url none
+#
+#   cross-bench run -b swebench_pro_gold -p online -p no_memory \
+#                   --limit 5 --db-url none
+#
+# See deviations.md S21 (Pro harness) and S22 (gold eval). For Verified,
+# use ``-b swebench_gold`` instead.
+[run]
+benchmark = "swebench"
+execution_mode = "gold_eval"
+timeout_seconds = 3600
+
+[benchmark]
+variant = "pro"
+include_hints = false
+retrieval = "none"
+requires_network = true

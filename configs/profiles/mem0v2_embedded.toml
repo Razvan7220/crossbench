@@ -1,0 +1,58 @@
+# MEMORY MIXIN: Mem0 v2.0.0 embedded (in-process, conversational, additive pipeline)
+#
+# Stack: -p <bench-llm-profile> -p mem0v2_embedded -b locomo_original
+#
+# Internal LLM/embedder choice is inherited from the bench LLM profile by
+# default — i.e. stacking ``-p online -p mem0v2_embedded`` makes mem0
+# extract facts with the same gpt-4o the bench is using; stacking ``-p
+# local -p mem0v2_embedded`` makes mem0 use the same Ollama model the
+# bench is using. The inheritance happens in
+# ``cross_bench/config.py::_inherit_bench_llm_into_memory``; it only
+# fires for keys NOT explicitly set here, so a downstream override
+# mixin (e.g. ``-p mem_internal_gpt4o_mini``) can diverge from the
+# bench choice without anyone having to edit this file.
+#
+# WHY this is the default. Without inheritance, this profile would
+# either need to hardcode a vendor (and surprise local-stack users
+# with cloud calls — see deviations.md M1) or leave mem0's defaults
+# in play (which is ``gpt-5-mini``, a reasoning-family model that
+# rejects ``max_tokens`` — same trap, different mechanism).
+#
+# Matches EverOS evaluation parameters:
+#   - top_k (retrieval_limit) = 20
+#   - max_content_length = 8000 (handled in middleware)
+#   - custom_instructions for speaker-attributed fact extraction
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here. Memory mixins are SCAFFOLD-AGNOSTIC — Mem0 v2 runs equally well
+# behind a ``conversational`` driver (LoCoMo, ConvoMem, LongMemEval),
+# a ``single_shot`` driver with code-RAG hooks (RepoBench,
+# CrossCodeEval), an ``agentic`` driver (Terminal-Bench), or the
+# ``mini_swe_agent`` scaffold with Option-E episodic memory
+# (SWE-bench). Hardcoding ``execution_mode = "conversational"`` here
+# would (and did, until 2026-05-21) silently force SWE-bench through
+# the wrong scaffold — patch generation became one-shot LLM instead
+# of the 250-step agentic loop. Scaffold is the benchmark TOML's
+# decision; this profile only declares **which memory provider**.
+[run]
+tags = ["mem0v2_embedded"]
+
+[system.memory]
+provider = "mem0v2_embedded"
+enabled = true
+user_id = "bench_mem0v2"
+retrieval_limit = 20
+custom_instructions = """\
+Extract self-contained personal memories from conversations between named speakers. \
+Use actual speaker names (e.g. 'Amy mentioned...'), never generic 'user' or 'assistant'. \
+Include specific dates, times, and temporal references when available. \
+Preserve exact names, numbers, amounts, prices, percentages, and locations. \
+Capture emotional context, personal preferences, and plans. \
+When a message has a timestamp prefix like [2023-05-08 13:56:00 | Amy], \
+ground the extracted memory to that date."""
+version = "v1.1"
+
+# NOTE: no llm_provider / llm_model / embedder_* keys here on purpose.
+# They are inherited from [system.llm] / [system.embedding] of the
+# bench-LLM profile (online / local / claude / gpt4o_mini / ...).
+# Override by stacking a memory-internal-LLM mixin AFTER this one.

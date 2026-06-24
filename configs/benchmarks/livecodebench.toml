@@ -1,0 +1,20 @@
+[run]
+benchmark = "livecodebench"
+timeout_seconds = 120
+
+[benchmark]
+# LiveCodeBench release to evaluate — release_v1 is the original paper set
+# (~400 problems); release_v2+ are timestamped later windows.
+release_version = "release_v1"
+
+# LM style for prompt construction (maps to livecodebench.lm_styles.LMStyle).
+# OpenAIChat matches GPT-4 / Claude-Sonnet style chat templates used by the
+# reference leaderboard.
+lm_style = "OpenAIChat"
+
+# Contamination-free evaluation: restrict to contests after the model's
+# training cutoff.
+# start_date = "2024-01-01"
+# end_date   = "2024-12-31"
+
+# limit = 10

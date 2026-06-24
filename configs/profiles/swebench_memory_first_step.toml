@@ -1,0 +1,14 @@
+# BENCHMARK MIXIN: inject memory only into step 0 of the agent loop.
+#
+# When stacked with a memory profile (e.g. mem0v2_embedded), this causes:
+#   - recall fires ONCE at step 0 only (memory context → first message)
+#   - no store at any step (no episodic ingest during the loop)
+#
+# The rest of the agent loop is memory-free: no retrieval, no extraction.
+#
+# Usage:
+#   cross-bench run -p online -p mem0v2_embedded -p swebench_memory_first_step \
+#                   -b swebench --task-id <id>
+
+[benchmark]
+memory_first_step_only = true

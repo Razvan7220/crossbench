@@ -1,0 +1,14 @@
+# BENCHMARK MIXIN: retrieve every step, no episodic ingest.
+#
+# When stacked with a memory profile (e.g. mem0v2_embedded), this causes:
+#   - recall fires at EVERY step (memory context queried each time)
+#   - no store at any step (no episodic ingest during the loop)
+#
+# Nothing is stored during the agent loop — retrieval only.
+#
+# Usage:
+#   cross-bench run -p online -p mem0v2_embedded -p swebench_memory_retrieve_only \
+#                   -b swebench --task-id <id>
+
+[benchmark]
+memory_retrieve_only = true

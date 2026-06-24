@@ -1,0 +1,50 @@
+# MEMORY-PARAM OVERRIDE: tell mem0 to STORE INGESTED CHUNKS VERBATIM
+# instead of running its LLM fact extractor on each one.
+#
+# Stack AFTER `mem0v1_embedded` / `mem0v2_embedded` (or their `*_api`
+# variants) — and BEFORE `llm_judge` if you're using that — to flip
+# the upstream `Memory.add(infer=True)` default to `False`:
+#
+#   cross-bench run -p online \
+#                   -p mem0v2_embedded \
+#                   -p mem0_no_infer \
+#                   -p llm_judge \
+#                   -b crosscodeeval
+#                  #     ^^^^^^^^^^^^^^ memory profile (sets provider, retrieval_limit, etc.)
+#                  #                      ^^^^^^^^^^^^^^ this mixin flips infer=False
+#
+# What `infer=False` does on the mem0 side
+# ----------------------------------------
+# When you `Memory.add(messages, infer=True)` (mem0's default), each
+# ingested message is passed through mem0's fact-extraction LLM (with
+# the unified v2 prompt — see deviations.md M9 / V1.M9). The stored
+# memory is the LLM's NL summary, NOT the original message. Re-reading
+# the same memory later via `Memory.search(...)` returns the summary.
+#
+# That's correct for CONVERSATIONAL memory (LoCoMo, ConvoMem,
+# LongMemEval): you'd rather store "Amy lives in NYC and prefers Thai
+# food" than the literal back-and-forth turns. The compression saves
+# storage and makes retrieval semantic-similarity-friendly.
+#
+# It is WRONG for CODE-RAG benchmarks (CrossCodeEval, RepoBench).
+# Their graders measure literal identifier match (`exact_match`,
+# `id_em`, `id_f1`). The LLM extractor synonymises identifiers,
+# strips punctuation, generalises types, and rewrites function
+# signatures into prose — every transformation kills the grade.
+# `deviations.md` C13 calls this out as the predicted mem0v2 vs.
+# no_memory trade-off; the `crosscodeeval-mem0v2-20260513-124127`
+# run is the empirical confirmation (mem0v2 EM 0.112 vs no_memory
+# 0.212 on the same 2665 Python tasks, same gpt-4o, same chunks).
+#
+# This mixin produces the "fair" mem0v2 code-RAG configuration: same
+# retriever (semantic vector search over the K=5 pre-retrieved
+# chunks), same retrieval_limit, same scope-filtering — only the
+# extraction step is bypassed. The stored memory is the raw chunk.
+# Comparison to `no_memory` then measures "mem0's retriever vs no
+# retrieval", not "mem0's extractor vs no extractor".
+#
+# Documented under deviations.md M9 (mem0v2) — the new `infer`
+# parameter row.
+
+[system.memory.params]
+infer = false

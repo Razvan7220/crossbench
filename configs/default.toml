@@ -1,0 +1,16 @@
+# Default platform configuration
+# Override per-benchmark or per-run in configs/benchmarks/ and configs/runs/
+
+[run]
+execution_mode = "single_shot"
+max_agent_steps = 20
+timeout_seconds = 300
+
+[system.llm]
+provider = "openai"
+model = "gpt-4o"
+temperature = 0.0
+max_tokens = 4096
+
+[system.prompt_strategy]
+type = "zero_shot"

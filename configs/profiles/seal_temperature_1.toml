@@ -1,0 +1,54 @@
+# SCAFFOLD MIXIN: Match Scale's sampling settings on the SEAL scaffold
+#
+# Stack AFTER ``seal_haiku45`` to align with Scale AI's published Pro
+# leaderboard run for Claude Haiku 4.5 (Oct 22 2025):
+#
+#   cross-bench run -b swebench_pro_seal -p seal_haiku45 -p seal_temperature_1 \
+#                   -p no_memory -n 5 --db-url none
+#
+# **What this profile changes vs ``seal_haiku45`` alone.**
+#
+# 1. ``--agent.model.temperature=1.0`` (was sweagent default 0.0).
+#    Scale uses T=1.0 for SWE-bench Pro runs. T=0 makes the agent
+#    deterministic and greedy; T=1 samples from the full distribution,
+#    giving the agent more diverse action sequences across steps.
+#    Empirically this is the single biggest behavioral knob between
+#    our 17% pass rate and Scale's ~39%: T=1 finds solutions our
+#    T=0 agent gets stuck on (~5-10pp expected lift).
+#
+# 2. ``--agent.model.max_output_tokens`` REMOVED (was 1024 in
+#    ``seal_haiku45``). Scale's runs don't cap output tokens. With a
+#    1024 cap, agent emissions that include a multi-block diff (a
+#    real patch can easily run 1500-3000 tokens) get truncated
+#    mid-emit, breaking submission. Removing the cap fixes a chunk of
+#    "patch malformed" failures (~2-5pp expected lift). Output
+#    averages ~40 tok/step in practice, so cost impact is negligible.
+#
+# **Where the value lives.** Profiles merge with list-replacement
+# semantics (see ``config.py::_merge``), so this profile's
+# ``seal_extra_args`` overrides ``seal_haiku45.toml``'s list whole-
+# cloth. The bedrock ``api_base`` is duplicated here intentionally so
+# stacking ``-p seal_haiku45 -p seal_temperature_1`` preserves the
+# Bedrock routing while picking up the sampling changes.
+#
+# **Provenance.** Every evaluation row carries ``prompt_caching_enabled``
+# (deviations.md S26) — cells with this profile should ALSO carry an
+# explicit run-tag identifying the temperature deviation, so cells
+# aren't accidentally compared to T=0 runs. Use ``--extra-env
+# CROSSBENCH_CELL_NAME=temp1_no_cap`` or similar in your dispatch
+# command so the Slack summary distinguishes them.
+#
+# **Comparability caveat.** This profile diverges from Scale's
+# published config on ONE remaining axis (Bedrock vs Anthropic-direct
+# API). For full Scale-byte-equivalent runs, stack with
+# ``seal_haiku45_direct`` instead of ``seal_haiku45`` (requires
+# ``ANTHROPIC_API_KEY`` in env / SSM).
+
+[run]
+tags = ["temperature-1", "scale-aligned-sampling"]
+
+[benchmark]
+seal_extra_args = [
+    "--agent.model.api_base=https://bedrock-runtime.us-east-1.amazonaws.com",
+    "--agent.model.temperature=1.0",
+]

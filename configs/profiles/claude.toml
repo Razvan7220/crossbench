@@ -1,0 +1,10 @@
+# LLM MIXIN: Claude (Anthropic)
+# Stack after a base profile: -p online -p claude
+# Requires: export ANTHROPIC_API_KEY="sk-ant-..."
+
+[system.llm]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+context_window = 200_000
+api_key = "${ANTHROPIC_API_KEY}"

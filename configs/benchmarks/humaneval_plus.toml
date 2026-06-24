@@ -1,0 +1,9 @@
+[run]
+benchmark = "humaneval_plus"
+timeout_seconds = 120
+
+[benchmark]
+# EvalPlus-hardened HumanEval: 164 problems with ~80x augmented test inputs.
+# pass@1 reflects the plus score (base AND plus must pass). Evaluation runs
+# in-process via evalplus's multiprocessing sandbox — no Docker image needed.
+# limit = 10

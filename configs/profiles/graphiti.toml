@@ -1,0 +1,23 @@
+# MEMORY MIXIN: Graphiti knowledge-graph memory (in-process)
+# Stack: -p online -p graphiti -b locomo_original
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["graphiti", "knowledge-graph"]
+
+[system.memory]
+provider = "graphiti_embedded"
+enabled = true
+
+[system.memory.params]
+llm_model = "gpt-4o-mini"
+llm_api_key = "${OPENAI_API_KEY}"
+llm_base_url = "${LLM_BASE_URL:https://api.openai.com/v1}"
+embedding_model = "text-embedding-3-small"
+retrieval_limit = 10
+user_id = "bench_user"
+context_window = 5
+enable_dedup = "true"
+enable_summaries = "true"
+search_active_only = "true"

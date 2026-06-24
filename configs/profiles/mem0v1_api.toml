@@ -1,0 +1,27 @@
+# MEMORY MIXIN: Mem0 v1.0.x cloud (MemoryClient at api.mem0.ai)
+# Stack: -p online -p mem0v1_api -b locomo_original
+#
+# Requires: pip install "mem0ai>=1.0,<2"
+#          MEM0_API_KEY env var (or api_key param below)
+#
+# Notes:
+#   - reset() intentionally calls scoped delete_all() rather than the
+#     cloud client's nuclear reset(), which would wipe the whole workspace.
+#   - output_format="v1.1" forces a uniform {"results": [...]} shape.
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["mem0v1_api"]
+
+[system.memory]
+provider = "mem0v1_api"
+enabled = true
+user_id = "bench_mem0v1_cloud"
+retrieval_limit = 20
+output_format = "v1.1"
+# api_key = "..."            # optional override, else reads MEM0_API_KEY
+# host = "https://api.mem0.ai"
+# org_id = "..."
+# project_id = "..."
+# app_id = "..."

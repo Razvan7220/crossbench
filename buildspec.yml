@@ -1,0 +1,132 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: us-east-1
+    ECR_ACCOUNT: 564175165906
+    ECR_URL: 564175165906.dkr.ecr.us-east-1.amazonaws.com
+    # Enable BuildKit so the orchestrator Dockerfile's ``--mount=type=cache``
+    # directives are honored. Without this, the cache mount line is silently
+    # treated as a no-op and pip re-downloads from PyPI on every build.
+    DOCKER_BUILDKIT: "1"
+  parameter-store:
+    SLACK_DEVOPS_WEBHOOK_URL: "/codebuild/slack-devops-webhook-url"
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to ECR private...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_URL
+      - echo Logging in to ECR Public Gallery to avoid Docker Hub rate limits...
+      - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+      # Initialise vendored submodules so the orchestrator image's
+      # ``pip install ".[...,seal]"`` can resolve
+      # ``sweagent @ file:./third_party/swe_agent``. Both submodules
+      # are on public github.com — no auth needed. Idempotent:
+      # ``--init`` is a no-op when already initialised, and
+      # CodeBuild's source clone may or may not have done it
+      # depending on the project's ``GitSubmodulesConfig`` setting.
+      # Running it here unconditionally keeps the build hermetic.
+      # See deviations.md S23 + workflow.md "Local SWE-bench Pro
+      # SEAL smoke" for the local equivalent.
+      - echo Initialising SEAL submodules...
+      - git submodule update --init --recursive
+      # ---- Slack DevOps start notification ----------------------------------------
+      - |
+        curl -s -X POST "$SLACK_DEVOPS_WEBHOOK_URL" \
+          -H "Content-Type: application/json" \
+          -d "{\"blocks\":[
+            {\"type\":\"section\",\"fields\":[
+              {\"type\":\"mrkdwn\",\"text\":\":hourglass_flowing_sand: *Build started*\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Build #*\n\`${CODEBUILD_BUILD_NUMBER}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*SHA*\n\`${CODEBUILD_RESOLVED_SOURCE_VERSION:0:7}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Branch*\n\`${CODEBUILD_SOURCE_VERSION}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Triggered by*\n\`$(echo ${CODEBUILD_INITIATOR} | sed 's|.*/||')\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Started*\n$(date -u +\"%Y-%m-%d %H:%M UTC\")\"}
+            ]}
+          ]}" \
+          || true
+  build:
+    commands:
+      # ---- base + function images use plain ``docker build`` ----
+      # These are small, infrequently-changed images and don't need a
+      # registry cache. The local Docker daemon's layer cache
+      # (LOCAL_DOCKER_LAYER_CACHE when available) is enough.
+      - echo Building base image...
+      - docker build -t cross-bench-base:latest -f src/cross_bench/execution/docker_templates/base.Dockerfile src/cross_bench/execution/docker_templates/
+      - echo Building function image...
+      - docker build -t cross-bench-function:latest -f src/cross_bench/execution/docker_templates/function_level.Dockerfile src/cross_bench/execution/docker_templates/
+
+      # ---- orchestrator uses buildx with ECR registry cache ----
+      # CodeBuild's LOCAL_DOCKER_LAYER_CACHE is per-instance — AWS rotates
+      # idle instances every ~15-30 min, so the local cache stops helping
+      # between bursts. The registry cache below persists in
+      # ``cross-bench-orchestrator-cache:buildcache`` and is granular per
+      # layer, so any rebuild only re-runs the layers whose inputs changed
+      # (typically a couple of cheap COPY layers on Python-only edits).
+      # See workflow.md § "Build cache".
+      - SHORT_SHA=${CODEBUILD_RESOLVED_SOURCE_VERSION:0:7}
+      - CACHE_REF=$ECR_URL/cross-bench-orchestrator-cache:buildcache
+      - echo Building orchestrator with BuildKit registry cache \(SHA $SHORT_SHA\) ...
+      # ``docker-container`` driver is required for --cache-to (the default
+      # ``docker`` driver doesn't support registry export).
+      - docker buildx create --name cb-builder --driver docker-container --use 2>/dev/null || docker buildx use cb-builder
+      # First build with an empty cache silently proceeds (BuildKit ignores
+      # missing --cache-from); on subsequent builds the cache pull
+      # restores warm layers in ~10s.
+      - >
+        docker buildx build
+        --cache-from "type=registry,ref=$CACHE_REF"
+        --cache-to "type=registry,ref=$CACHE_REF,mode=max"
+        -t $ECR_URL/cross-bench-orchestrator:latest
+        -t $ECR_URL/cross-bench-orchestrator:$SHORT_SHA
+        --push
+        -f Dockerfile
+        .
+  post_build:
+    commands:
+      # Orchestrator was pushed via ``docker buildx build --push`` above,
+      # so post_build only handles the function image (built with the
+      # plain docker driver — image lives on the host daemon, needs an
+      # explicit tag + push).
+      - SHORT_SHA=${CODEBUILD_RESOLVED_SOURCE_VERSION:0:7}
+      - echo Tagging and pushing function image \(:latest, :$SHORT_SHA\) ...
+      - docker tag cross-bench-function:latest $ECR_URL/cross-bench-function:latest
+      - docker tag cross-bench-function:latest $ECR_URL/cross-bench-function:$SHORT_SHA
+      - docker push $ECR_URL/cross-bench-function:latest
+      - docker push $ECR_URL/cross-bench-function:$SHORT_SHA
+      - echo ALL DONE
+      # ---- Slack DevOps notification ----------------------------------------
+      - SHORT_SHA=${CODEBUILD_RESOLVED_SOURCE_VERSION:0:7}
+      - BUILD_ID=${CODEBUILD_BUILD_ID}
+      - BUILD_NUM=${CODEBUILD_BUILD_NUMBER}
+      - BRANCH=${CODEBUILD_SOURCE_VERSION}
+      # Strip ARN prefix to get just the username (arn:aws:iam::...:user/maryam → maryam)
+      - INITIATOR=$(echo "${CODEBUILD_INITIATOR}" | sed 's|.*/||')
+      # Duration: CODEBUILD_START_TIME is epoch-ms; convert to elapsed seconds
+      - ELAPSED_S=$(( ( $(date +%s%3N) - ${CODEBUILD_START_TIME} ) / 1000 ))
+      - ELAPSED_M=$(( ELAPSED_S / 60 ))
+      - ELAPSED_S_PART=$(( ELAPSED_S % 60 ))
+      - DURATION="${ELAPSED_M}m ${ELAPSED_S_PART}s"
+      - FINISHED_AT=$(date -u +"%Y-%m-%d %H:%M UTC")
+      - |
+        if [ "${CODEBUILD_BUILD_SUCCEEDING}" = "1" ]; then
+          ICON=":white_check_mark:"; STATUS="Succeeded"
+        else
+          ICON=":x:"; STATUS="Failed"
+        fi
+      - |
+        curl -s -X POST "$SLACK_DEVOPS_WEBHOOK_URL" \
+          -H "Content-Type: application/json" \
+          -d "{\"blocks\":[
+            {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"${ICON} CodeBuild ${STATUS}\",\"emoji\":true}},
+            {\"type\":\"section\",\"fields\":[
+              {\"type\":\"mrkdwn\",\"text\":\"*SHA*\n\`${SHORT_SHA}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Branch*\n\`${BRANCH}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Triggered by*\n\`${INITIATOR}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Build #*\n\`${BUILD_NUM}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Duration*\n\`${DURATION}\`\"},
+              {\"type\":\"mrkdwn\",\"text\":\"*Finished*\n${FINISHED_AT}\"}
+            ],\"accessory\":{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Build logs\",\"emoji\":true},\"url\":\"https://us-east-1.console.aws.amazon.com/codesuite/codebuild/projects/cross-bench-dev-build/build/${BUILD_ID}/log\"}}
+          ]}" \
+          || true

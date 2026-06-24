@@ -1,0 +1,41 @@
+# MIXIN: enable LLM-as-judge metric alongside F1.
+#
+# Stack AFTER the benchmark + memory profile to add the Mem0-paper "J"
+# score to every conversational task's evaluation:
+#
+#   cross-bench run -p online -p mem0v2_embedded -p llm_judge \
+#                   -b locomo_original
+#
+# What you get
+#   * Per-task evaluation gains ``llm_judge_correct`` (0/1),
+#     ``llm_judge_num_correct``, ``llm_judge_num_runs``,
+#     ``llm_judge_latency_ms``.
+#   * Summary gains ``pass_rate_llm_judge`` (fraction of tasks the LLM
+#     marked correct) plus the usual ``avg_llm_judge_*`` averages.
+#   * ``total_latency_ms`` per task already includes the judge call —
+#     no double-count concerns.
+#
+# What you do NOT get by default
+#   * F1 is still the primary metric driving ``pass``/``correct``. To
+#     flip to the LLM judge as primary, also set
+#     ``primary_metric = "llm_judge"`` on the benchmark TOML or via
+#     ``--overrides``. Paper-faithfulness for the published LoCoMo
+#     leaderboard means F1 stays primary; the J score is additive.
+#
+# Cost
+#   * Each task makes ``num_runs`` judge calls. Default ``1`` matches
+#     upstream Mem0 v2's ``evaluate_llm_judge`` (single call, no
+#     majority vote) so our ``pass_rate_llm_judge`` is directly
+#     comparable to the published Mem0-paper J score. Bump
+#     ``num_runs > 1`` to enable majority voting for lower
+#     run-to-run variance, at the cost of N× the OpenAI calls.
+#
+# Provider — defaults to OpenAI gpt-4o-mini for cost. Override the
+# ``model`` / ``provider`` keys to switch judges.
+
+[benchmark.judge.llm_judge]
+enabled = true
+provider = "openai"
+model = "gpt-4o-mini"
+api_key = "${OPENAI_API_KEY}"
+num_runs = 1

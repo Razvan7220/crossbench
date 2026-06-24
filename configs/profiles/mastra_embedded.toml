@@ -1,0 +1,24 @@
+# MEMORY MIXIN: Mastra multi-layer memory (in-process)
+# Stack: -p online -p mastra_embedded -b locomo_original
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["mastra", "embedded"]
+
+[system.memory]
+provider = "mastra_embedded"
+enabled = true
+
+[system.memory.params]
+llm_model = "gpt-4o-mini"
+llm_api_key = "${OPENAI_API_KEY}"
+llm_base_url = "${LLM_BASE_URL:https://api.openai.com/v1}"
+embedding_model = "all-MiniLM-L6-v2"
+semantic_top_k = 4
+last_messages = 10
+working_memory = true
+observational_memory = true
+observe_threshold = 2000
+reflect_threshold = 4000
+resource_id = "bench-user"

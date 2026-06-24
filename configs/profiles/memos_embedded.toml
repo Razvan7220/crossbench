@@ -1,0 +1,59 @@
+# MEMORY MIXIN: MemOS (MemTensor) embedded — paper-faithful pipeline
+#
+# Stack: -p <bench-llm-profile> -p memos_embedded -b locomo_original
+#
+# Requires: pip install MemoryOS
+#
+# Wraps upstream MemTensor/MemOS via the `memos` Python module. The
+# middleware drives upstream's GeneralMemCube + SimpleStructMemReader
+# directly (bypassing the MOS orchestrator — see deviations.md O5,
+# intentional). Tracks upstream commit ``338d5e7b`` (2026-04-29).
+#
+# Backends (set via `backend`):
+#   - naive_text (default): in-process Python list, set-intersection
+#     retrieval. Lightweight, no external services.
+#   - general_text: vector search via Qdrant (local/embedded mode).
+#     Requires `pip install qdrant-client`.
+#   - tree_text: graph-backed retrieval via Neo4j / Postgres. User
+#     must supply `data_dir` pointing to a pre-built cube.
+#
+# MemReader (per-fact LLM extraction) follows upstream MOSCore.add
+# semantics by default (auto-enabled only for tree_text). Override
+# via `use_mem_reader = true` to opt in on naive_text / general_text
+# — CrossBench-specific superset of upstream, useful for comparing
+# the marginal benefit of per-fact extraction across backends.
+#
+# Internal LLM/embedder choice is inherited from the bench LLM
+# profile by default (see deviations.md O21). Override by stacking
+# a `mem_internal_*` mixin AFTER this profile.
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["memos_embedded"]
+
+[system.memory]
+provider = "memos_embedded"
+enabled = true
+
+[system.memory.params]
+backend = "naive_text"
+retrieval_limit = 20
+user_id = "bench_memos"
+
+# MemReader knobs — defaults match upstream MOSCore.add semantics
+# (MemReader auto-enables only for tree_text). Defaults for chunker
+# pin upstream's configs/chunker.py:14-15 values.
+# use_mem_reader = true        # uncomment to force MemReader on naive/general
+mem_reader_mode = "fine"
+mem_reader_chunk_size = 512
+mem_reader_chunk_overlap = 128
+
+# Filesystem persistence — off by default. LoCoMo benchmarks reset
+# per-conversation, so cube dumps would be pure overhead.
+persist_on_reset = false
+
+# NOTE: no llm_provider / llm_model / embedder_* keys here on purpose.
+# They are inherited from [system.llm] / [system.embedding] of the
+# bench-LLM profile (online / local / claude / gpt4o_mini / ...).
+# See cross_bench/config.py::_MEMORY_LLM_KEY_MAP for the contract.

@@ -1,0 +1,26 @@
+[run]
+benchmark = "swebench"
+# Mini-SWE-agent (text-mode) scaffold — paper-faithful port of upstream's
+# swebench.yaml. See deviations.md S1 and
+# src/cross_bench/execution/scaffolds/mini_swe_agent.py.
+execution_mode = "mini_swe_agent"
+# Per-task wall-clock budget for the AGENT loop (separate from each
+# bash command's per-execution timeout, which is 60s upstream).
+timeout_seconds = 3600
+# Upstream swebench.yaml step_limit. The scaffold also honors this cap.
+max_agent_steps = 250
+
+[benchmark]
+variant = "verified"
+# Hints reporting column: ``false`` matches SWE-bench leaderboard
+# headline (WITHOUT-hints), ``true`` opts into the WITH-hints ceiling.
+# See deviations.md S2.
+include_hints = false
+# Retrieval column (deviations.md S3):
+#   "none"   — raw issue text; no retrieval. Baseline leaderboard column.
+#   "bm25"   — Pyserini Lucene BM25 over repo, top-K hits truncated to
+#              ``retrieval_bm25_token_budget`` tokens. Paper baseline.
+#   "oracle" — gold-modified file included verbatim. Ceiling column.
+# Use three runs to fill the row × {none, bm25, oracle} matrix.
+retrieval = "none"
+retrieval_bm25_token_budget = 27000

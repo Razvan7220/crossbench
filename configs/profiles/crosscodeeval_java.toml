@@ -1,0 +1,14 @@
+# BENCHMARK MIXIN: switch CrossCodeEval to the Java split.
+#
+# Stack: -p online -p <memory> -p crosscodeeval_java -b crosscodeeval
+#
+# Overrides the default ``[benchmark] language = "python"`` from
+# ``configs/benchmarks/crosscodeeval.toml``. Pulls Java tasks from
+# ``ZHENGRAN/cross_code_eval_java`` on the HuggingFace Hub.
+#
+# Other axes (``retrieval_setting``, ``synthetic_workspace_dir``)
+# unchanged from the benchmark default. To stack a non-default
+# retrieval setting, layer another profile mixin on top.
+
+[benchmark]
+language = "java"

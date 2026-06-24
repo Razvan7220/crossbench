@@ -1,0 +1,35 @@
+# MEMORY MIXIN: EverMemOS API (cloud, official `evermemos>=0.3.13` SDK)
+# Stack: -p online -p evermemos_api -b locomo_original
+#
+# Targets the EverMind cloud at https://api.evermind.ai by default.
+# The middleware wraps the published Python SDK (`evermemos==0.3.13` on
+# PyPI) which speaks the documented `/api/v0/` API. See deviations.md
+# entries E.A1-E.A5 for the full audit trail.
+#
+# Self-hosted: if you run a server that exposes the same `/api/v0/`
+# paths, override `base_url` (or set `EVER_MEM_OS_BASE_URL` env) and
+# verify the contract matches before claiming leaderboard parity.
+#
+# Prerequisites:
+#   1. export EVERMEMOS_API_KEY="..."   (or set api_key in this profile)
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["evermemos_api", "cloud"]
+
+[system.memory]
+provider = "evermemos_api"
+enabled = true
+
+[system.memory.params]
+# Cloud default. Empty string here means "use SDK default", which the
+# SDK resolves to https://api.evermind.ai (or EVER_MEM_OS_BASE_URL).
+base_url = "${EVER_MEM_OS_BASE_URL:}"
+api_key = "${EVERMEMOS_API_KEY}"
+user_id = "bench_user"
+retrieve_method = "hybrid"
+memory_types = "episodic_memory,profile,foresight,event_log"
+retrieval_limit = 10
+timeout = 30
+max_retries = 3

@@ -1,0 +1,15 @@
+[run]
+benchmark = "repobench"
+timeout_seconds = 60
+
+[benchmark]
+language = "python"
+splits = ["cross_file_first", "cross_file_random", "in_file"]
+levels = ["2k", "4k", "8k", "12k", "16k"]
+start_date = "2023-12-01"
+end_date = "2023-12-31"
+max_token_nums = 15800
+tokenizer = "tiktoken:cl100k_base"
+
+# Resolved relative to the CrossBench repo root (see repobench._resolve_synthetic_workspace_dir).
+synthetic_workspace_dir = "tmp"

@@ -1,0 +1,8 @@
+[submodule "third_party/swebench_pro"]
+	path = third_party/swebench_pro
+	url = https://github.com/scaleapi/SWE-bench_Pro-os.git
+	branch = main
+[submodule "third_party/swe_agent"]
+	path = third_party/swe_agent
+	url = https://github.com/scaleapi/SWE-agent.git
+	branch = scale-customizations

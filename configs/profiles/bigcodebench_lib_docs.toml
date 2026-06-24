@@ -1,0 +1,25 @@
+# BENCHMARK MIXIN: enable the CodeRAG-Bench library-documentation
+# corpus for BigCodeBench.
+#
+# Stack: -p online -p mem0v2_embedded -p bigcodebench_lib_docs -b bigcodebench
+#
+# Loads the ~34k-entry library-documentation corpus from
+# ``code-rag-bench/library-documentation`` (Wang et al. 2024,
+# arXiv:2406.14497) into the memory store once at run start, then
+# retrieves per-task using the function signature + docstring + libs
+# hint. Memory is NOT reset between tasks — the corpus survives.
+#
+# Coverage: 13 third-party libraries (numpy, pandas, matplotlib,
+# tensorflow, torch, sklearn, django, flask, pygame, skimage,
+# werkzeug, django_rest_framework) plus the Python stdlib
+# (``python.library.<module>``). Tasks using libraries outside this
+# set get no useful retrieval — see deviations.md B12 for the
+# documented coverage gap.
+#
+# When stacked with mem0v2: ``infer=True`` (mem0's default) will
+# summarise the doc bodies into NL facts, losing literal API
+# signatures. The RAG baseline (``-p rag``) stores chunks verbatim
+# and is the natural choice for the canonical leaderboard column.
+
+[benchmark]
+use_lib_docs_corpus = true

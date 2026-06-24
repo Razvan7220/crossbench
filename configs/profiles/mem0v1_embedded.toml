@@ -1,0 +1,30 @@
+# MEMORY MIXIN: Mem0 v1.0.x embedded (in-process, pre-v2 API)
+# Stack: -p online -p mem0v1_embedded -b locomo_original
+#
+# Requires: pip install "mem0ai>=1.0,<2"
+#
+# Key v1 vs v2 deltas (handled by the middleware):
+#   - search() takes top-level user_id kwarg (v2 requires filters={"user_id":...})
+#   - search() uses limit= (v2 renamed to top_k=)
+#   - config uses custom_fact_extraction_prompt + custom_update_memory_prompt
+#     (v2 collapses them into custom_instructions)
+
+# NOTE: ``execution_mode`` / ``timeout_seconds`` intentionally NOT set
+# here — see ``mem0v2_embedded.toml`` for the rationale.
+[run]
+tags = ["mem0v1_embedded"]
+
+[system.memory]
+provider = "mem0v1_embedded"
+enabled = true
+user_id = "bench_mem0v1"
+retrieval_limit = 20
+custom_fact_extraction_prompt = """\
+Extract self-contained personal memories from conversations between named speakers. \
+Use actual speaker names (e.g. 'Amy mentioned...'), never generic 'user' or 'assistant'. \
+Include specific dates, times, and temporal references when available. \
+Preserve exact names, numbers, amounts, prices, percentages, and locations. \
+Capture emotional context, personal preferences, and plans. \
+When a message has a timestamp prefix like [2023-05-08 13:56:00 | Amy], \
+ground the extracted memory to that date."""
+version = "v1.1"

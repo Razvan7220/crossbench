@@ -1,0 +1,23 @@
+# Normalise line endings: store LF in repo, check out per-platform
+* text=auto
+
+# Force LF for shell scripts and Dockerfiles regardless of platform
+*.sh        text eol=lf
+Dockerfile* text eol=lf
+*.py        text eol=lf
+*.toml      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.tex       text eol=lf
+*.md        text eol=lf
+*.ini       text eol=lf
+*.txt       text eol=lf
+*.json      text eol=lf
+*.jsonl     text eol=lf
+
+# Binary files — no line-ending conversion
+*.png       binary
+*.jpg       binary
+*.pdf       binary
+*.gz        binary
+*.zip       binary

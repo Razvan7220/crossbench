@@ -1,0 +1,36 @@
+# SWE-agent config OVERLAY: Anthropic prompt caching (deviations.md S26).
+#
+# Passed as a SECOND ``--config`` to ``python -m sweagent run-batch``,
+# AFTER the pinned ``config/tool_use.yaml``. sweagent merges config
+# files recursively (``sweagent/utils/serialization.py::
+# merge_nested_dicts``), so this file ADDS ``agent.history_processors``
+# without touching the pinned config's templates / tools / parse
+# function. The vendored submodule stays byte-identical to upstream.
+#
+# What it does: ``CacheControlHistoryProcessor`` (shipped by the
+# pinned SWE-agent at ``sweagent/agent/history_processors.py``) stamps
+# ``cache_control: {type: ephemeral}`` on the last 2 user/tool
+# messages before each LLM call and clears the marks from older
+# messages. LiteLLM forwards the marks to Anthropic (direct API) or
+# Bedrock (cachePoint). Net effect on Bedrock: the shared conversation
+# prefix is served from cache, and cache READS do not count against
+# the account's tokens-per-minute quota — only the newest exchange
+# (cache write) + fresh tokens burn TPM. Measured June 2026: SEAL
+# steps averaged ~49k fresh input tokens/call, saturating the 5M TPM
+# Haiku 4.5 quota at ~100 calls/min account-wide. With caching the
+# per-step burn drops to roughly the newest exchange (~3-6k tokens).
+#
+# Why ``last_n_messages: 2`` (the processor default, made explicit):
+# the NEWEST mark is the cache write for this step; the SECOND-newest
+# is where the previous step wrote, so this step's prefix lookup hits
+# it. We run ``--num_workers 1`` with one instance per subprocess, so
+# the concurrent-resample caveat in the processor docstring (set to 1)
+# does not apply.
+#
+# Enable by stacking ``-p seal_prompt_caching`` (sets
+# ``[benchmark] seal_prompt_caching = true``). Default is OFF so the
+# leaderboard-comparable SEAL cell keeps Scale's exact config.
+agent:
+  history_processors:
+    - type: cache_control
+      last_n_messages: 2

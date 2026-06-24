@@ -1,0 +1,22 @@
+# Override mixin — flip seal_haiku45's Bedrock model spec to the direct
+# Anthropic API form. Stack AFTER seal_haiku45 so the override wins:
+#
+#   cross-bench run -p seal_haiku45 -p seal_haiku45_direct ...
+#
+# Why this exists. ``seal_haiku45.toml`` pins
+# ``bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`` which auths via
+# the AWS IAM credential chain — ECS task role on prod, but a per-user
+# IAM principal locally. If that principal lacks
+# ``AmazonBedrockLimitedAccess`` (or the per-model toggle in the Bedrock
+# console), every LiteLLM call 403s and sweagent exits with zero LLM
+# calls + zero patches.
+#
+# This mixin sidesteps the Bedrock chain entirely. ``anthropic/...`` is
+# LiteLLM's prefix for direct anthropic-sdk routing; auth comes from
+# ``ANTHROPIC_API_KEY`` in env. Same snapshot id, same model.
+
+[benchmark]
+seal_model_name = "anthropic/claude-haiku-4-5-20251001"
+# Drop the Bedrock api_base override too — the direct API uses
+# api.anthropic.com which LiteLLM hits by default.
+seal_extra_args = []

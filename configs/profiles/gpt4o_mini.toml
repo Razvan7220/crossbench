@@ -1,0 +1,7 @@
+# LLM MIXIN: GPT-4o-mini (OpenAI, fast and cost-effective)
+# Stack after a base profile: -p online -p gpt4o_mini
+
+[system.llm]
+provider = "openai"
+model = "gpt-4o-mini"
+max_tokens = 2048

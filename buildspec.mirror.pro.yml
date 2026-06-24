@@ -1,0 +1,62 @@
+# Mirror SWE-bench Pro per-instance images from Docker Hub to ECR.
+#
+# Triggered manually:
+#
+#   # Mirror all 731 Pro instances (likely needs multiple chunks under
+#   # anonymous Docker Hub rate limits — use OFFSET/LIMIT to chunk).
+#   aws codebuild start-build \
+#     --project-name cross-bench-dev-mirror-swebench-pro-images \
+#     --region us-east-1
+#
+#   # Mirror a 100-instance window
+#   aws codebuild start-build \
+#     --project-name cross-bench-dev-mirror-swebench-pro-images \
+#     --region us-east-1 \
+#     --environment-variables-override \
+#       name=LIMIT,value=100 name=OFFSET,value=0
+#
+# Env vars (Pulumi-managed defaults in codebuild.py):
+#   ECR_REPO_URI       — e.g. 564175165906.dkr.ecr.us-east-1.amazonaws.com/swebench-pro
+#   AWS_REGION         — us-east-1
+#   LIMIT              — max instances to mirror (0 = all)
+#   OFFSET             — skip first N instances (chunking)
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install --quiet "datasets>=2.18" "huggingface-hub>=0.20"
+
+  pre_build:
+    commands:
+      - echo "=== Mirror Pro config ==="
+      - 'echo "ECR_REPO_URI = ${ECR_REPO_URI}"'
+      - 'echo "AWS_REGION   = ${AWS_REGION}"'
+      - 'echo "LIMIT        = ${LIMIT}"'
+      - 'echo "OFFSET       = ${OFFSET}"'
+      - echo "=== docker login to ECR ==="
+      - aws ecr get-login-password --region "${AWS_REGION}" |
+          docker login --username AWS --password-stdin
+          "$(echo ${ECR_REPO_URI} | cut -d/ -f1)"
+
+  build:
+    commands:
+      - python scripts/mirror_swebench_pro_images.py
+          --ecr-repo "${ECR_REPO_URI}"
+          --ecr-repo-name swebench-pro
+          --region "${AWS_REGION}"
+          --limit "${LIMIT}"
+          --offset "${OFFSET}"
+
+  post_build:
+    commands:
+      - echo "=== Final ECR repo contents ==="
+      - aws ecr describe-images
+          --repository-name swebench-pro
+          --region "${AWS_REGION}"
+          --query 'length(imageDetails)'
+          --output text
+          || echo "describe-images failed (non-fatal)"

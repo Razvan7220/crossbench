@@ -1,0 +1,53 @@
+# SCAFFOLD MIXIN: Full LLM I/O + sweagent .traj capture for SEAL runs.
+#
+# Stack on top of any SEAL profile to capture EVERY LLM request +
+# response AND sweagent's full agent trajectory, with both files
+# uploaded to S3 for post-run analysis:
+#
+#   cross-bench run -b swebench_pro_seal \
+#       -p online -p seal_haiku45_direct_temp1 -p seal_prompt_caching \
+#       -p no_memory -p seal_full_trace \
+#       --task-set 8 --reruns 3 \
+#       --extra-env ANTHROPIC_API_KEY=...
+#
+# **What this enables.**
+#
+# 1. ``llm_trace_enabled = true`` — flips
+#    ``CROSSBENCH_LLM_TRACE_ENABLED=1`` in the sweagent subprocess.
+#    A LiteLLM CustomLogger captures every ``litellm.completion``
+#    call's full request body (messages, cache_control marks,
+#    tool_calls) AND response body (content, tool_calls, usage,
+#    finish_reason) to a per-task JSONL sidecar.
+#
+# 2. ``llm_trace_stderr = false`` — keeps the JSONL but suppresses the
+#    per-step stderr dump. Set 8 × 3 reruns × ~100 steps = ~3300
+#    LLM calls; flooding stderr is noise. The JSONL has everything.
+#
+# **S3 layout after a run.** ``seal.py`` uploads both sidecars to
+# ``runs/swebench_pro_seal/<run_id>/sidecars/<task_id>/`` next to
+# the standard ``tasks/<task_id>.json`` row:
+#
+#   tasks/<task_id>.json                     — CrossBench evaluation row
+#   sidecars/<task_id>/trajectory.traj       — sweagent's full agent dialog
+#                                              (same shape as Scale's
+#                                              published S3 trajectories)
+#   sidecars/<task_id>/llm_trace.jsonl       — one line per LiteLLM call
+#
+# **Direct comparability to Scale.** Scale's Oct 2025 Haiku 4.5 Pro
+# trajectories are at:
+#   s3://scaleapi-results/swe-bench-pro/claude-45haiku-10222025/traj/
+#     <task_id>/<task_id>.traj
+#
+# Our ``trajectory.traj`` is byte-shape-equivalent (both come from
+# sweagent's ``DefaultAgent.save_trajectory``). Diff side-by-side.
+#
+# **Cost.** Each ``.traj`` is ~10-20 MB; ~0.5 MB per ``llm_trace.jsonl``
+# per ~100-step task. Set 8 × 3 reruns × (10 MB + 0.5 MB) ≈ 350 MB of
+# S3 storage. Tractable.
+
+[run]
+tags = ["full-trace", "diagnostic"]
+
+[benchmark]
+llm_trace_enabled = true
+llm_trace_stderr = false

@@ -1,0 +1,36 @@
+# LLM MIXIN: Claude Haiku 4.5 (Anthropic)
+#
+# Recommended baseline for the SWE-bench Pro ablation grid.
+# Sweet spot for showing memory lift:
+#   - Strong enough to solve some Pro tasks (~25-30% baseline expected
+#     under mini-swe-agent scaffold; ~39% on SEAL leaderboard)
+#   - Weak enough that memory has 25+ pp of headroom to help
+#   - Cheap: ~$0.50 input / $2.50 output per 1M tokens (~$3k for the full
+#     6×4×3 ablation grid vs ~$50k on Opus)
+#
+# Snapshot is pinned (-20251001) so cross-run stability holds across
+# weeks. The bare ``claude-haiku-4-5`` alias floats to whatever's
+# latest, which breaks reproducibility.
+#
+# Stack with the bench TOML and any memory profile:
+#   cross-bench run -b swebench_pro -p haiku45 -p no_memory
+#   cross-bench run -b swebench_pro -p haiku45 -p mem0v2_embedded
+#
+# Requires:
+#   export ANTHROPIC_API_KEY="sk-ant-..."
+
+[run]
+tags = ["anthropic", "claude-haiku-4-5"]
+
+[system.llm]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+temperature = 0.0
+max_tokens = 4096
+context_window = 200_000
+# NOTE: Anthropic's Messages API does NOT accept a ``seed`` parameter
+# (returns 400 ``seed: Extra inputs are not permitted``). The
+# AnthropicDriver ignores ``LLMConfig.seed``; for variance management
+# on this profile, rely on temperature=0 plus 3× cell reruns.
+# OpenAI-provider profiles can still set ``seed`` — it's honored there.
+api_key = "${ANTHROPIC_API_KEY}"

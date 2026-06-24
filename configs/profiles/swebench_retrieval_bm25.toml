@@ -1,0 +1,22 @@
+# BENCHMARK MIXIN: switch SWE-bench to the BM25-retrieval column.
+#
+# Stack: -p online -p swebench_retrieval_bm25 -b swebench
+#
+# Pulls each task's BM25-augmented prompt from upstream's pre-computed
+# ``princeton-nlp/SWE-bench_bm25_27K`` HuggingFace dataset (Pyserini
+# Lucene over the repo at base_commit, top hits truncated to 27000
+# ``cl100k_base`` tokens). The retrieval block is injected as a
+# ``Retrieved files (bm25)`` section before the issue description.
+#
+# This is the paper-faithful BM25 column — using the dataset upstream
+# already published is byte-identical to re-running the Pyserini
+# pipeline locally, without taking on the Java + Lucene + Pyserini
+# infrastructure burden. See deviations.md S3.
+#
+# To pick a different token budget (13K / 40K / 50K), stack another
+# profile that sets ``retrieval_bm25_token_budget``, or override via
+# ``-c custom.toml``.
+
+[benchmark]
+retrieval = "bm25"
+retrieval_bm25_token_budget = 27000

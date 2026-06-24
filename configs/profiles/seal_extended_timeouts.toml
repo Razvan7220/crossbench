@@ -1,0 +1,48 @@
+# SCAFFOLD MIXIN: extended SEAL subprocess wallclock for tail-heavy
+# tasks under Docker deployment.
+#
+# Stack alongside any other SEAL profile:
+#
+#   cross-bench run -b swebench_pro_seal \
+#       -p online -p seal_haiku45 -p seal_temperature_1 \
+#       -p seal_prompt_caching -p seal_extended_timeouts \
+#       -p no_memory --task-set 4
+#
+# **What this profile sets.**
+#
+# ``seal_subprocess_timeout_seconds = 7200``  (default 3600). The
+# CrossBench-side wallclock cap on the entire ``python -m sweagent
+# run-batch`` subprocess. Scale's effective Modal budget for Pro runs
+# was ~125 min on the model side (per_instance_call_limit=250 ×
+# ~30s/call), so the 60-min default was below Scale's ceiling for
+# tail-heavy tasks. 7200s gives 2 hours per task.
+#
+# **What this profile does NOT (and cannot) set.**
+#
+# Scale's published Pro runs additionally set
+# ``--instances.deployment.runtime_timeout=300`` and
+# ``--instances.deployment.deployment_timeout=9000``. Those fields are
+# **Modal-only** — they live on ``ModalDeploymentConfig``, not
+# ``DockerDeploymentConfig`` (which is what our ``seal_deployment_type
+# = "docker"`` runs use). ``DockerDeploymentConfig`` has
+# ``extra = "forbid"`` so passing those flags through to a Docker
+# deployment would crash sweagent with a pydantic validation error.
+#
+# The per-bash-command timeout for the Docker path is controlled by
+# the SCAFFOLD's own ``tools.execution_timeout`` setting in
+# ``third_party/swe_agent/config/tool_use.yaml`` — already set to
+# **450 seconds**, which MATCHES Scale's pinned config. So the
+# per-command timeout is already aligned, just via a different code
+# path than the Modal-only ``runtime_timeout`` field.
+#
+# Bottom line: under Docker, the only timeout knob actually worth
+# raising is the CrossBench-side subprocess cap. Scale's Modal-only
+# timeout fields are not applicable to us; the per-command timeout
+# they fold into ``runtime_timeout`` is already at parity via
+# ``tools.execution_timeout`` in the pinned tool_use.yaml.
+
+[run]
+tags = ["extended-subprocess-wallclock"]
+
+[benchmark]
+seal_subprocess_timeout_seconds = 7200

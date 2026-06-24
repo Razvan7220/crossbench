@@ -1,0 +1,7 @@
+# LLM MIXIN: o3-mini (OpenAI reasoning model)
+# Stack after a base profile: -p online -p o3_mini
+[system.llm]
+provider = "openai"
+model = "o3-mini"
+max_tokens = 16384
+api_key = "${OPENAI_API_KEY}"

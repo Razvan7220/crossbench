@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+.installed.cfg
+lib/
+lib64/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Mypy / type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+.migration-backup/
+
+# Artifacts / run outputs
+artifacts/
+*.jsonl
+
+# Benchmark dataset cache (adapters download on demand)
+data/
+
+# Docker
+.docker/
+
+# Pulumi
+.pulumi/
+Pulumi.*.yaml
+!Pulumi.yaml
+
+# OS
+Thumbs.db
+
+# Claude Code session data (but track the spec file used by the CI review workflow)
+.claude/
+!.claude/pr-review-spec.md
+
+# Stray Windows drive path (WSL artefact)
+C:/
+nul
+artifacts_aws/
+artifacts_local/
+artifacts_test/
+artifacts_v3/
+artifacts_v3_50/
+.cb-dispatch.*
+s3:/

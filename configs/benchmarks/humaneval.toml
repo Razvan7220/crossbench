@@ -1,0 +1,6 @@
+[run]
+benchmark = "humaneval"
+timeout_seconds = 120
+
+[benchmark]
+num_samples = 1

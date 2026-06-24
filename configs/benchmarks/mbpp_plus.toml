@@ -1,0 +1,9 @@
+[run]
+benchmark = "mbpp_plus"
+timeout_seconds = 120
+
+[benchmark]
+# EvalPlus-hardened MBPP sanitized subset: 378 problems with ~35x augmented
+# test inputs. pass@1 reflects the plus score (base AND plus must pass).
+# Evaluation runs in-process via evalplus's multiprocessing sandbox.
+# limit = 10

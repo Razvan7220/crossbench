@@ -1,0 +1,10 @@
+# BENCHMARK MIXIN: switch CrossCodeEval to the TypeScript split.
+#
+# Stack: -p online -p <memory> -p crosscodeeval_typescript -b crosscodeeval
+#
+# Overrides the default ``[benchmark] language = "python"`` from
+# ``configs/benchmarks/crosscodeeval.toml``. Pulls TypeScript tasks from
+# ``ZHENGRAN/cross_code_eval_typescript`` on the HuggingFace Hub.
+
+[benchmark]
+language = "typescript"

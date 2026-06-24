@@ -1,0 +1,103 @@
+# SWE-bench Pro with Scale AI's SEAL scaffold.
+#
+# The SEAL scaffold is the canonical scaffold for Scale AI's public
+# SWE-bench Pro leaderboard
+# (https://labs.scale.com/leaderboard/swe_bench_pro_public).
+# It lives in two pinned git submodules:
+#
+#   third_party/swe_agent/        scaleapi/SWE-agent@scale-customizations
+#   third_party/swebench_pro/     scaleapi/SWE-bench_Pro-os@main
+#
+# Setup (one-time after a fresh clone):
+#   git submodule update --init --recursive
+#   pip install -e .[seal]
+#
+# The `seal` extra (declared in pyproject.toml) installs sweagent from
+# the vendored submodule at third_party/swe_agent. For AWS orchestrator
+# images, bake both steps into the Dockerfile so dispatches don't pay
+# clone + install latency per task.
+#
+# See deviations.md S23 for the SEAL scaffold details.
+#
+# Usage:
+#   cross-bench run -b swebench_pro_seal -p haiku45 \
+#                   --task-id <pro-instance-id> --db-url none
+#
+[run]
+benchmark = "swebench"
+execution_mode = "seal"
+# Long agent loops + Docker pulls + per-step LLM calls — give it room.
+timeout_seconds = 3600
+# SEAL's step budget is enforced inside SWE-agent's own loop, not here.
+# The CrossBench-level `max_agent_steps` is the engine's task-loop guard,
+# not a SEAL knob.
+max_agent_steps = 250
+
+[benchmark]
+variant = "pro"
+include_hints = false
+# Pro doesn't have published BM25/oracle augmented datasets — only
+# retrieval = "none" is supported. See deviations.md S21.
+retrieval = "none"
+
+# SEAL-specific knobs (consumed by `execution/scaffolds/seal.py`).
+# All keys are namespaced with `seal_*` so adding a SEAL parameter never
+# conflicts with a benchmark-level field on the same TOML.
+#
+# `seal_config_path` is resolved relative to the SWE-agent submodule.
+# `tool_use.yaml` is the config Scale's example references for Pro.
+seal_config_path = "config/tool_use.yaml"
+# Model passed to SWE-agent via --agent.model.name (LiteLLM format).
+#
+# ECS runs authenticate via IAM task role (no ANTHROPIC_API_KEY on the
+# task definition). LiteLLM's "bedrock/" prefix routes through boto3
+# so the IAM credential chain is used automatically — same auth path
+# as the haiku45_bedrock CrossBench profile.
+#
+# Local runs with an ANTHROPIC_API_KEY set in the environment can use
+# the direct-API form "anthropic/claude-3-7-sonnet-20250219" instead.
+#
+# NOTE: This is NOT the leaderboard-canonical model (Scale uses Sonnet 3.7
+# direct-API). It is the ECS-compatible equivalent for internal comparison.
+# Override per-run: --benchmark-param seal_model_name=anthropic/...
+seal_model_name = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+# 0 = no cap (matches Scale's example). Set a positive USD value to
+# bail out of an instance after spending that much.
+seal_per_instance_cost_limit = 0.0
+# 0 = use the model layer's default call cap. Scale's example uses 3,
+# but that's extremely aggressive; the leaderboard cells use much larger
+# budgets via the agent config's `step_limit`.
+seal_per_instance_call_limit = 0
+# Docker is the only deployment we support out-of-the-box. SWE-agent
+# also supports `modal` (cloud) and `local` (no isolation) but those
+# require additional credentials/setup that the SEAL config doesn't bake in.
+seal_deployment_type = "docker"
+# Per-task subprocess timeout. Mirrors the upstream Modal sandbox ceiling.
+seal_subprocess_timeout_seconds = 3600
+# Transient-NoPrediction retry (deviations.md S23 sub #9). A NoPrediction
+# whose cause is a TRANSIENT swerex infra failure (a leaked-port sibling
+# container holding 0.0.0.0:8000, or a runtime that never came alive) is
+# retried up to this many times — the sub #8 orphan sweep runs again
+# before each attempt. Deterministic `build_failed` (Alpine/musl base
+# images) is NEVER retried. Every row carries `swerex_infra_error`
+# (the classified cause, or null) and `seal_attempts`.
+seal_max_retries = 1
+# Whether to also retry a NoPrediction caused by the outer subprocess
+# timeout (returncode 124). Off by default — a retry doubles the
+# worst-case wall-clock (up to 2x `seal_subprocess_timeout_seconds`) for
+# a low recovery probability.
+seal_retry_on_timeout = false
+# Extra args passed verbatim after the standard SEAL invocation.
+# Example: `["--instances.deployment.runtime_timeout=7200"]` to extend
+# the per-instance container timeout.
+seal_extra_args = []
+# Anthropic/Bedrock prompt caching (deviations.md S26). When true,
+# `configs/seal/cache_control.yaml` is passed as a second --config to
+# sweagent, enabling its CacheControlHistoryProcessor. Cuts Bedrock
+# TPM-quota burn ~10x on agent loops (cache reads don't count toward
+# the quota) at the cost of diverging from Scale's exact config —
+# every row carries `prompt_caching_enabled` so cells stay bucketable.
+# Default OFF: the leaderboard-comparable cell keeps Scale's payloads.
+# Opt in by stacking `-p seal_prompt_caching`.
+seal_prompt_caching = false
+requires_network = true

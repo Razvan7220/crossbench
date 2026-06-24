@@ -1,0 +1,74 @@
+# SWE-agent config OVERLAY: tool-selection + edit-mechanism nudge.
+#
+# Passed as a SECOND (or third) ``--config`` to ``python -m sweagent
+# run-batch``, AFTER the pinned ``config/tool_use.yaml`` and any
+# ``cache_control.yaml`` overlay. Sweagent merges configs recursively
+# (``sweagent/utils/serialization.py::merge_nested_dicts``), so this
+# file REPLACES ``agent.templates.system_template`` with an extended
+# version. Everything else in the pinned config (tools, parse function,
+# instance template, error templates) survives untouched.
+#
+# **Why this exists (deviations.md, summarized).** A cohort comparison
+# across 4 different CrossBench config cells (Bedrock+caching ×2,
+# Bedrock-no-cache, Anthropic-direct-no-cache) on the 11-task Set 8
+# diagnostic — every cell averages **~0 `str_replace_editor str_replace`
+# uses per task** while Scale's published Pro runs average **~6.8 per
+# task** on the same instances. The behavioral fingerprint diverges
+# byte-for-byte across our routing paths but matches Scale via Scale's
+# internal LiteLLM proxy. Without access to Scale's proxy, the only
+# lever we have is an explicit system-prompt rider that shifts the
+# model's tool prior toward ``str_replace_editor`` for source edits.
+#
+# **What this overlay sets** — appends two guidance sections to
+# Scale's one-line system template:
+# 1. Tool-selection bias: prefer ``str_replace_editor`` for source
+#    edits, reserve ``bash`` for navigation / test execution.
+# 2. Mechanism-of-fix guidance: when the bug is about an unwanted
+#    attribute / config default, REMOVE the line rather than flip
+#    its value. Always ``git diff`` before submit.
+#
+# **Comparability caveat.** Cells produced with this overlay are NOT
+# byte-comparable to Scale's exact scaffold config: Scale's system
+# template is a single line, ours is extended. Every evaluation row
+# carries ``str_replace_nudge_enabled: true/false`` so consumers
+# bucket cells; default OFF.
+#
+# **Why a system-template override and not an instance-template
+# suffix.** System prompts are persistent across all turns AND
+# typically cached by the provider (Anthropic, Bedrock both cache
+# system prompt prefixes implicitly). An instance-template suffix
+# would replay every turn and burn extra tokens. System-template
+# is the lower-cost place to drop behavioral guidance.
+
+agent:
+  templates:
+    system_template: |-
+      You are a helpful assistant that can interact with a computer to solve tasks.
+
+      Tool-selection guidance for editing source code:
+      - For modifying existing files, ALWAYS prefer `str_replace_editor` with
+        the `str_replace` command over `bash` (sed, cat heredocs, perl -i, etc.).
+        Surgical `str_replace_editor str_replace` edits preserve file structure
+        exactly and avoid quoting / whitespace / indentation damage common in
+        bash editing.
+      - For VIEWING files, ALWAYS prefer `str_replace_editor` `view` with a
+        line range parameter (e.g. `[340, 450]`) over `cat`/`sed -n`. The
+        ranged view loads only the relevant code, preserving your context
+        budget for actual reasoning.
+      - Reserve `bash` for: navigation (find, grep, git log/show), test
+        execution (pytest, python script.py), and operations that have no
+        `str_replace_editor` equivalent (e.g. installing packages).
+
+      Mechanism-of-fix guidance:
+      - When fixing bugs about a class attribute, configuration default, or
+        method override that the test expects to be ABSENT or to inherit from
+        a parent: REMOVE the attribute/method line entirely rather than
+        changing its value. Flipping `True` to `False` (or `enabled = True`
+        to `enabled = False`) leaves the attribute as an override, which
+        fails tests that assert the attribute is unset / inherits the parent.
+      - When fixing bugs about an UNUSED import or a redundant statement,
+        delete the line entirely rather than commenting it out.
+      - Before calling `submit`, ALWAYS run `git diff` to inspect your
+        change. Verify the diff matches the failing test's exact expected
+        state — not just the right direction. If your diff modifies the
+        VALUE of a line that the test expects REMOVED, edit again.

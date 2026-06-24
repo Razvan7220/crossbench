@@ -1,0 +1,38 @@
+# =============================================================================
+#  BASE PROFILE: local
+# =============================================================================
+#  Fully offline — zero cloud API calls.
+#  LLM:        Qwen3:7b via Ollama
+#  Embeddings: nomic-embed-text via Ollama
+#
+#  Stack with memory mixins:
+#    cross-bench run -p local -p mem0 -b humaneval
+#    cross-bench run -p local -p no_memory -b humaneval
+#
+#  Prerequisites:
+#    1. docker compose --profile ollama up -d
+#    2. docker exec ollama ollama pull qwen3:7b
+#    3. docker exec ollama ollama pull nomic-embed-text:latest
+# =============================================================================
+
+# NOTE: ``execution_mode`` / ``max_agent_steps`` / ``timeout_seconds``
+# intentionally NOT set here — see ``online.toml`` for the rationale.
+# Scaffold is the benchmark TOML's decision; this profile only declares
+# **which LLM/embedding** the run uses.
+[run]
+tags = ["local", "ollama", "qwen3"]
+
+[system.llm]
+provider = "generic_openai"
+model = "qwen3:7b"
+max_tokens = 4096
+base_url = "http://localhost:11434/v1"
+api_key = "not-needed"
+
+[system.embedding]
+provider = "ollama"
+model = "nomic-embed-text:latest"
+base_url = "http://localhost:11434"
+
+[system.prompt_strategy]
+type = "zero_shot"

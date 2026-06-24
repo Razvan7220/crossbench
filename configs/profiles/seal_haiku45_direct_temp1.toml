@@ -1,0 +1,46 @@
+# SCAFFOLD MIXIN: Anthropic direct API + Scale-aligned sampling (T=1, no
+# output cap) for the SEAL scaffold. Single profile so the stack
+# composes without the seal_haiku45_direct ↔ seal_temperature_1 merge
+# conflict (Bedrock api_base leaking into the direct-API call).
+#
+# Usage:
+#
+#   cross-bench run -b swebench_pro_seal \
+#       -p online -p seal_haiku45_direct_temp1 -p seal_prompt_caching \
+#       -p no_memory -n 5 --db-url none \
+#       --extra-env ANTHROPIC_API_KEY=...
+#
+# **Auth.** Uses ``ANTHROPIC_API_KEY`` env var. Bedrock IAM creds are
+# NOT used. For ECS dispatches, pass via ``--extra-env`` or
+# preload into the task definition's environment block.
+#
+# **Settings — fully Scale-aligned.**
+#  - Model: ``anthropic/claude-haiku-4-5`` (LiteLLM's anthropic-direct
+#    prefix + the family **alias**, not a pinned snapshot). Scale's
+#    Oct 2025 Pro trace shows ``litellm_proxy/anthropic/claude-haiku-4-5``
+#    — the alias resolves to whatever Anthropic considers current,
+#    which is what matches Scale's run byte-for-byte. Pinning to
+#    ``-20251001`` would lock us off the alias's natural progression
+#    and risk diverging if Anthropic ships a safety-tuned successor.
+#  - Temperature: 1.0 (Scale's published config; exploratory
+#    sampling vs the default greedy T=0).
+#  - max_output_tokens: NOT capped (was 1024 in ``seal_haiku45`` —
+#    Scale doesn't cap, so we don't either; long patches need room).
+#  - api_base: NOT set (LiteLLM hits ``api.anthropic.com`` by
+#    default for the anthropic/ prefix).
+#
+# **Comparability.** Cells produced with this profile + caching are
+# **directly comparable to Scale's published ~39% Haiku 4.5 Pro
+# number** on three of the four axes Scale used (model + endpoint +
+# sampling + caching). The remaining axis is the sandbox (we still
+# use swerex+docker vs Scale's Modal) — that's the ~14% NoPrediction
+# floor that requires a separate infra change to close.
+
+[run]
+tags = ["anthropic-direct", "temperature-1", "scale-aligned-sampling"]
+
+[benchmark]
+seal_model_name = "anthropic/claude-haiku-4-5"
+seal_extra_args = [
+    "--agent.model.temperature=1.0",
+]
