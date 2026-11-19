@@ -47,6 +47,11 @@ _FIXTURE_DOCKER_PY = textwrap.dedent('''
                 f"RUN /root/python3.11/bin/pip3 install --no-cache-dir {PACKAGE_NAME}\\n\\n"
             )
 
+        def _build_image(self) -> str:
+            """Builds image, returns image ID."""
+            dockerfile = self.glibc_dockerfile
+            return dockerfile
+
         async def start(self):
             self._pull_image()
             if self._config.python_standalone_dir is not None:
