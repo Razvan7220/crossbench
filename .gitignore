@@ -64,6 +64,7 @@ secrets/
 
 # Artifacts / run outputs
 artifacts/
+logs/
 *.jsonl
 
 # Benchmark dataset cache (adapters download on demand)
