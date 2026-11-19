@@ -13,8 +13,13 @@ Requires Python 3.12+.
 
 ```bash
 git clone <repo-url> CrossBench && cd CrossBench
-pip install -e ".[llm,memory,embedding]"
+pip install -c constraints.txt -e ".[llm,memory,embedding]"
 ```
+
+`constraints.txt` is the generated lock file for the full dev image. It pins
+the known-good Mem0 v2 stack (`mem0ai 2.0.2`, `qdrant-client 1.18.0`,
+`protobuf 5.29.6`, `grpcio 1.80.0`, `grpcio-status 1.71.2`) so reinstall
+and rebuilds don't drift into incompatible protobuf 6.x resolution.
 
 ### 2. API keys
 
@@ -94,7 +99,7 @@ The `local` profile keeps everything on-box via Ollama — no cloud calls.
 
 ```bash
 docker compose --profile ollama up -d
-docker exec ollama ollama pull qwen3:7b
+docker exec ollama ollama pull qwen2.5:7b-instruct
 docker exec ollama ollama pull nomic-embed-text:latest
 ```
 
@@ -113,6 +118,64 @@ To swap the model, override on the CLI:
 ```bash
 cross-bench run -p local -p no_memory -b crosscodeeval \
   --model generic_openai:deepseek-coder:6.7b -n 50
+```
+
+### LoCoMo with local memory
+
+The `local` base profile only redirects the bench LLM. Embedded memory
+systems run their own internal LLM/embedding calls, so stack
+`ollama_memory` **after** the memory mixin:
+
+```bash
+# Fast baseline: chunk + embed + hybrid retrieval
+cross-bench run -p local -p rag -p ollama_memory -b locomo_original -n 2
+
+# EverMemOS (LLM fact extraction; keyword retrieval in this profile)
+cross-bench run -p local -p evermemos_embedded -p ollama_memory -b locomo_original -n 2
+
+# Graphiti knowledge graph (slow on CPU: per-message LLM extraction)
+cross-bench run -p local -p graphiti -p ollama_memory -b locomo_original -n 2
+```
+
+On a shared host where Ollama is pinned to a few CPUs, add
+`-p ollama_8threads` **last**. It points both the bench LLM and the
+memory-internal calls at derived models whose Modelfile sets
+`PARAMETER num_thread 8`. Without it, Ollama starts one llama.cpp thread
+per physical core (36 here), which oversubscribes an 8-CPU cgroup and
+drops generation from ~12.5 tok/s to ~0.1 tok/s.
+
+```bash
+# Native Ollama: create the derived models once
+cat >/tmp/Modelfile.qwen8t <<'EOF'
+FROM qwen2.5:7b-instruct
+PARAMETER num_thread 8
+EOF
+ollama create qwen2.5:7b-instruct-8t -f /tmp/Modelfile.qwen8t
+
+cat >/tmp/Modelfile.nomic8t <<'EOF'
+FROM nomic-embed-text:latest
+PARAMETER num_thread 8
+EOF
+ollama create nomic-embed-text:8t -f /tmp/Modelfile.nomic8t
+
+# 8 threads, keyword retrieval, 10 QA pairs
+cross-bench run -p local -p evermemos_embedded -p ollama_memory \
+  -p ollama_8threads -b locomo_original -n 10
+```
+
+The model thread count and the CPU limit are independent: the Modelfile
+controls how many llama.cpp threads exist, while the systemd unit's
+`CPUAffinity=0-7` controls which CPUs they may run on. Set both.
+
+`-n` caps QA pairs, but the first LoCoMo conversation (~419 messages)
+is still ingested in full. On CPU, expect minutes for RAG and hours for
+EverMemOS/Graphiti. For Mem0 embedded, stack `-p embed_1536` last: its
+native Ollama embedder needs the URL without `/v1`, and Qdrant is sized
+from `embedder_dims` (1536 for GTE-Qwen2, 768 for nomic-embed-text).
+
+```bash
+cross-bench run -p local -p mem0v2_embedded -p ollama_memory \
+  -p ollama_8threads -p embed_1536 -b locomo_original -n 3
 ```
 
 ## Leaderboard
