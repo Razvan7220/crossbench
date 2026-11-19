@@ -138,6 +138,29 @@ async def test_nonempty_prefix_prepends_to_s3_key(tmp_path):
     assert key == "runs/swebench_pro/abc-123/config.json"
 
 
+@pytest.mark.asyncio
+async def test_environment_json_lands_next_to_config(tmp_path):
+    """``environment.json`` mirrors to S3 under the same prefix as config."""
+    store, recorder = _make_store(tmp_path, prefix="runs/swebench_pro/")
+
+    payload = {
+        "schema_version": 1,
+        "run_id": "abc-123",
+        "software": {"packages": {"tokenizers": "0.22.1"}},
+    }
+    await store.store_run_environment("abc-123", payload)
+
+    local = tmp_path / "abc-123" / "environment.json"
+    assert json.loads(local.read_text()) == payload
+    # Unlike ``config.json``, the environment payload is not run through
+    # the generic secret-key scrubber — it must keep package versions
+    # such as ``tokenizers`` whose key merely *contains* "token".
+    assert json.loads(local.read_text())["software"]["packages"]["tokenizers"] == "0.22.1"
+    _local, bucket, key = recorder.uploads[-1]
+    assert bucket == "test-bucket"
+    assert key == "runs/swebench_pro/abc-123/environment.json"
+
+
 def test_prefix_normalisation_strips_leading_slash(tmp_path):
     """``/runs/x/`` and ``runs/x/`` produce identical layout."""
     s1 = ArtifactStore(backend="local", local_dir=str(tmp_path), s3_prefix="/runs/x/")

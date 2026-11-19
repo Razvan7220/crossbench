@@ -628,8 +628,13 @@ leaderboard stays consistent with `summary.json`.
 
 ## Where results land
 
-- `artifacts/runs/<run-id>/summary.json` — aggregate metrics + config snapshot
-- `artifacts/runs/<run-id>/tasks/` — per-task inputs, outputs, judgements
+Each run directory contains everything needed to interpret — and, for
+local models, reconstruct — the run:
+
+- `config.json` — the resolved run configuration (models, memory params, benchmark params)
+- `environment.json` — actual execution environment: command line, Python/package versions, git revision + dirty state, lockfile hashes, CPU model/affinity/cgroup limits, GPU inventory, and Ollama server/model digests + Modelfile parameters (`num_thread`, `num_ctx`, …). Useful when comparing latency across hosts with different core counts. Set `CROSS_BENCH_CAPTURE_ENVIRONMENT=0` to skip the probe on offline runs.
+- `summary.json` — aggregate metrics + config snapshot
+- `tasks/` — per-task inputs, outputs, judgements
 - `cross-bench results` / `cross-bench compare` — CLI views
 - `cross-bench serve` — browser dashboard at http://localhost:8080
 

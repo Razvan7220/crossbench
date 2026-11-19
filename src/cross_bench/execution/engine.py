@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import statistics
 import time
 from datetime import datetime, timezone
@@ -177,6 +178,7 @@ class RunEngine:
         logger.info("run.start", run_id=config.run_id, benchmark=config.benchmark)
 
         await self._artifacts.store_run_config(config)
+        await self._capture_environment(config)
         await self._results.create_run(config)
 
         # Resolve components
@@ -219,6 +221,50 @@ class RunEngine:
 
         logger.info("run.complete", run_id=config.run_id, metrics=metrics)
         return run_result
+
+    async def _capture_environment(self, config: RunConfig) -> None:
+        """Write ``environment.json`` next to ``config.json``.
+
+        ``config.json`` records what the run *asked for* (models, profiles,
+        memory params). ``environment.json`` records what it actually ran
+        on: command line, package versions, git revision, CPU
+        affinity/cgroup limits, GPU inventory, and Ollama model digests +
+        parameters. This is what lets a later run on a different host
+        (or a different core count) be compared apples-to-apples for
+        latency, not just accuracy.
+
+        Best-effort by contract: probes shell out and hit HTTP endpoints,
+        so any failure is logged and swallowed rather than aborting the
+        benchmark. Set ``CROSS_BENCH_CAPTURE_ENVIRONMENT=0`` to skip the
+        probe entirely (offline / air-gapped runs where the Ollama HTTP
+        calls would only burn their timeout).
+        """
+        store = getattr(self._artifacts, "store_run_environment", None)
+        if store is None:
+            # Duck-typed artifact-store fakes predate this hook.
+            return
+        if os.environ.get("CROSS_BENCH_CAPTURE_ENVIRONMENT", "").strip().lower() in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }:
+            logger.info("run.environment_skipped", run_id=config.run_id)
+            return
+        try:
+            from cross_bench.environment import collect_environment
+
+            # Collection does blocking subprocess / HTTP work; keep it off
+            # the event loop so concurrent task execution isn't stalled.
+            payload = await asyncio.to_thread(collect_environment, config)
+            await store(config.run_id, payload)
+            logger.info("run.environment_captured", run_id=config.run_id)
+        except Exception as exc:  # noqa: BLE001 — never abort a run for diagnostics
+            logger.warning(
+                "run.environment_capture_failed",
+                run_id=config.run_id,
+                error=f"{type(exc).__name__}: {exc}",
+            )
 
     # ------------------------------------------------------------------
     # Code-generation pipeline (original)

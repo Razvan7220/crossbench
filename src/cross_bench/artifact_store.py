@@ -53,6 +53,7 @@ class ArtifactStore:
     Layout under both backends is identical::
 
         {s3_prefix}{run_id}/config.json
+        {s3_prefix}{run_id}/environment.json
         {s3_prefix}{run_id}/summary.json
         {s3_prefix}{run_id}/tasks/{task_id}.json
 
@@ -137,6 +138,20 @@ class ArtifactStore:
     async def store_run_config(self, config: Any) -> None:
         run_dir = self._ensure_dir(config.run_id)
         self._write_json(run_dir / "config.json", _redact_secrets(asdict(config)))
+
+    async def store_run_environment(
+        self, run_id: str, environment: dict[str, Any]
+    ) -> None:
+        """Persist the captured hardware/software environment of a run.
+
+        Written as ``environment.json`` next to ``config.json``. The
+        payload comes from :mod:`cross_bench.environment`; it is already
+        redacted, so it goes through ``_write_json`` directly (the
+        generic ``_redact_secrets`` pass would also hide benign keys
+        such as Python's ``tokenizers`` package version).
+        """
+        run_dir = self._ensure_dir(run_id)
+        self._write_json(run_dir / "environment.json", environment)
 
     async def store_run_summary(self, run_result: Any) -> None:
         run_dir = self._ensure_dir(run_result.run_id)
