@@ -46,7 +46,7 @@ def run(
 
     \b
     Profiles are stackable — use multiple -p flags to compose a config:
-        # Fully local — Qwen3:7b via Ollama, zero cloud calls
+        # Fully local — Qwen2.5:7b-instruct via Ollama, zero cloud calls
         cross-bench run -p local -b humaneval -n 10
 
         # Cloud — GPT-4o via OpenAI API
@@ -221,12 +221,15 @@ def list_profiles() -> None:
 
     descriptions = {
         # Base profiles
-        "local": "Base — Qwen3:7b via Ollama, Ollama embeddings",
+        "local": "Base — Qwen2.5:7b-instruct via Ollama, Ollama embeddings",
         "online": "Base — GPT-4o (OpenAI), OpenAI embeddings",
         # LLM mixins
         "claude": "Mixin — switches LLM to Claude (Anthropic)",
         "o3_mini": "Mixin — switches LLM to o3-mini (OpenAI reasoning)",
         "gpt4o_mini": "Mixin — switches LLM to GPT-4o-mini",
+        # Local memory mixins
+        "ollama_memory": "Mixin — points embedded-memory LLM/embeddings at local Ollama",
+        "ollama_8threads": "Mixin — 8-thread Ollama models for CPU-pinned hosts",
         # Memory mixins
         "no_memory": "Mixin — disables memory",
         "mem0v1_api": "Mixin — Mem0 v1 cloud (MemoryClient, pre-v2 API)",

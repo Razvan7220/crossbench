@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from cross_bench.config import _interpolate_env, load_run_config, load_toml
+from cross_bench.config import (
+    BUILTIN_PROFILES,
+    _interpolate_env,
+    load_run_config,
+    load_toml,
+)
 
 
 def test_env_interpolation():
@@ -489,3 +494,62 @@ def test_inherit_respects_nested_params_shape():
     assert mem["params"]["llm_model"] == "gpt-4o-mini"
     # Other keys with no nested explicit value still inherit at top level
     assert mem.get("llm_provider") == "openai"
+
+
+# ---------------------------------------------------------------------------
+# embed_1536 profile — one 1536-dim embedder for every memory architecture
+# ---------------------------------------------------------------------------
+
+_EMBEDDED_MEMORY_PROFILES = [
+    "mem0v1_embedded",
+    "mem0v2_embedded",
+    "evermemos_embedded",
+    "graphiti",
+    "hindsight_embedded",
+    "mastra_embedded",
+    "memos_embedded",
+    "rag",
+]
+
+
+def test_embed_1536_listed_in_builtin_profiles():
+    assert "embed_1536" in BUILTIN_PROFILES
+
+
+@pytest.mark.parametrize("memory_profile", _EMBEDDED_MEMORY_PROFILES)
+def test_embed_1536_forces_gte_embedding_for_every_memory_mixin(memory_profile):
+    """Stacking ``embed_1536`` last must override every memory mixin."""
+    cfg = load_run_config(
+        benchmark="locomo_original",
+        profiles=["local", memory_profile, "embed_1536"],
+    )
+
+    assert cfg.system.embedding.model == "gte-qwen2:8t"
+    params = cfg.system.memory.params
+    assert params["embedding_model"] == "gte-qwen2:8t"
+    assert params["embedder_model"] == "gte-qwen2:8t"
+    assert params["embedder_provider"] == "ollama"
+    assert params["embedder_base_url"] == "http://localhost:11434"
+    assert params["embedder_dims"] == 1536
+    assert params["embedding_base_url"] == "http://localhost:11434/v1"
+
+
+def test_embed_1536_keeps_8thread_llm_when_stacked_last():
+    """The embedding profile must not clobber the 8-thread chat model."""
+    cfg = load_run_config(
+        benchmark="locomo_original",
+        profiles=[
+            "local",
+            "mem0v2_embedded",
+            "ollama_memory",
+            "ollama_8threads",
+            "embed_1536",
+        ],
+    )
+
+    assert cfg.system.llm.model == "qwen2.5:7b-instruct-8t"
+    assert cfg.system.embedding.model == "gte-qwen2:8t"
+    params = cfg.system.memory.params
+    assert params["llm_model"] == "qwen2.5:7b-instruct-8t"
+    assert params["embedder_model"] == "gte-qwen2:8t"
+    assert params["embedder_dims"] == 1536

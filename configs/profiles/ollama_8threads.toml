@@ -1,0 +1,49 @@
+# =============================================================================
+#  RUNTIME MIXIN: ollama_8threads
+# =============================================================================
+#  Use derived Ollama models that pin llama.cpp to 8 CPU threads:
+#    qwen2.5:7b-instruct-8t
+#    nomic-embed-text:8t
+#
+#  Why: Ollama defaults to one llama.cpp thread per physical core (36 on
+#  this host). If the service is pinned to fewer CPUs (CPUAffinity=0-7 in
+#  the systemd unit), 36 threads oversubscribe those cores and generation
+#  collapses from ~12.5 tok/s to ~0.1 tok/s. A derived model with
+#  ``PARAMETER num_thread 8`` keeps the thread count aligned with the CPU
+#  budget.
+#
+#  Create the derived models once (native Ollama):
+#    cat >/tmp/Modelfile.qwen8t <<'EOF'
+#    FROM qwen2.5:7b-instruct
+#    PARAMETER num_thread 8
+#    EOF
+#    ollama create qwen2.5:7b-instruct-8t -f /tmp/Modelfile.qwen8t
+#
+#    cat >/tmp/Modelfile.nomic8t <<'EOF'
+#    FROM nomic-embed-text:latest
+#    PARAMETER num_thread 8
+#    EOF
+#    ollama create nomic-embed-text:8t -f /tmp/Modelfile.nomic8t
+#
+#  Stack LAST, after ``ollama_memory``, so both the bench LLM and the
+#  embedded memory's internal LLM/embeddings use the 8-thread variants:
+#    cross-bench run -p local -p evermemos_embedded -p ollama_memory \
+#      -p ollama_8threads -b locomo_original -n 10
+# =============================================================================
+
+[run]
+tags = ["ollama", "cpu-limited", "8-threads"]
+
+[system.llm]
+model = "qwen2.5:7b-instruct-8t"
+
+[system.embedding]
+model = "nomic-embed-text:8t"
+
+[system.memory.params]
+# Bench-LLM inheritance would otherwise pick the base names from
+# ``local.toml`` only when these keys are absent. They are present in
+# ``ollama_memory.toml`` too, so override them explicitly here.
+llm_model = "qwen2.5:7b-instruct-8t"
+embedding_model = "nomic-embed-text:8t"
+embedder_model = "nomic-embed-text:8t"

@@ -1,0 +1,94 @@
+# =============================================================================
+#  EMBEDDING MIXIN: embed_1536
+# =============================================================================
+#  Forces every embedded memory system to use the 1536-dimensional
+#  GTE-Qwen2-1.5B-instruct embedder via local Ollama:
+#
+#      gte-qwen2:8t   (F16, 1536 dims, PARAMETER num_thread 8)
+#
+#  Why: the memory systems default to OpenAI ``text-embedding-3-small``
+#  (1536 dims).  Local stacks that swapped in ``nomic-embed-text``
+#  (768 dims) hit Qdrant collection-size errors such as
+#  "expected dim: 1536, got 768".  GTE-Qwen2 keeps the 1536 dims while
+#  staying fully offline.
+#
+#  Stack this AFTER the memory mixin and, when used, AFTER
+#  ``ollama_8threads`` so this profile wins the embedding keys (the
+#  8-threads mixin still owns the internal LLM):
+#
+#    cross-bench run -p local -p mem0v2_embedded -p ollama_memory \
+#      -p ollama_8threads -p embed_1536 -b locomo_original -n 3
+#
+#  Covers (embedded implementations):
+#    - mem0v1_embedded / mem0v2_embedded   native Ollama embedder
+#      (``embedder_base_url`` without ``/v1``; Qdrant dims = 1536)
+#    - memos_embedded                      native Ollama embedder for
+#      ``general_text`` + SimpleStructMemReader; Qdrant dim = 1536
+#    - evermemos_embedded / graphiti_embedded / hindsight_embedded
+#      OpenAI-compatible ``/v1/embeddings`` via the inherited LLM URL
+#    - rag                                 separate ``embedding_base_url``
+#    - mastra_embedded                     OpenAI-compatible embedder
+#      (``embedding_provider = "ollama"``)
+#
+#  Prerequisites (native Ollama):
+#    # Use a correctly converted GGUF.  The rjmalagon upload has a
+#    # two-byte gap at the start of its data section, so llama.cpp
+#    # reads every tensor two bytes early and returns all-zero
+#    # embeddings.  The second-state conversion is clean:
+#    curl -L -o gte-qwen2-f16.gguf \
+#      https://huggingface.co/second-state/gte-Qwen2-1.5B-instruct-GGUF/resolve/main/gte-Qwen2-1.5B-instruct-f16.gguf
+#
+#    # Public GTE-GGUFs omit ``qwen2.pooling_type``.  Without it Ollama
+#    # classifies the model as completion-only and refuses /api/embed;
+#    # the script adds the key (3 = last-token pooling):
+#    python scripts/prepare_gte_qwen2_gguf.py \
+#      gte-qwen2-f16.gguf gte-qwen2-pooled-f16.gguf
+#
+#    # Modelfile:
+#    #   FROM /absolute/path/gte-qwen2-pooled-f16.gguf
+#    #   PARAMETER num_thread 8
+#    ollama create gte-qwen2:8t -f Modelfile
+#
+#  Verify (the norm must be 1.0, not 0.0):
+#    curl -s http://localhost:11434/api/embed \
+#      -d '{"model":"gte-qwen2:8t","input":"dimension test"}' \
+#      | python3 -c 'import json,sys,math; e=json.load(sys.stdin)["embeddings"][0]; print(len(e), math.sqrt(sum(x*x for x in e)))'
+#    # -> 1536 1.0
+#
+#  Reference numbers on the shared alpen host: the Ollama service is
+#  already pinned to 8 CPUs (CPUAffinity=0-7, CPUQuota=800%), and the
+#  model carries ``num_thread 8`` so llama.cpp does not oversubscribe
+#  that cgroup.
+# =============================================================================
+
+[run]
+tags = ["ollama", "embeddings", "1536-dims", "gte-qwen2"]
+
+# Bench-side embedding driver (used by benchmarks that embed queries
+# directly, e.g. code-RAG tasks).
+[system.embedding]
+provider = "ollama"
+model = "gte-qwen2:8t"
+base_url = "http://localhost:11434"
+
+[system.memory.params]
+# --- Embeddings (shared keys) ----------------------------------------------
+# EverMemOS / Graphiti / Hindsight read ``embedding_model`` and reuse the
+# inherited ``llm_base_url`` (OpenAI-compatible, ``/v1``) for embeddings.
+embedding_model = "gte-qwen2:8t"
+
+# RAG and Mastra build their own embedding client, so they need an
+# explicit OpenAI-compatible endpoint + key.
+embedding_base_url = "http://localhost:11434/v1"
+embedding_api_key = "ollama-local"
+
+# Mem0 / MemOS style keys. ``embedder_base_url`` is the NATIVE Ollama
+# endpoint (no ``/v1``): both packages use ``ollama.Client`` internally
+# for the ``ollama`` embedder backend.
+embedder_provider = "ollama"
+embedder_model = "gte-qwen2:8t"
+embedder_base_url = "http://localhost:11434"
+embedder_dims = 1536
+
+# Mastra's embedder switch (SentenceTransformer by default).
+embedding_provider = "ollama"

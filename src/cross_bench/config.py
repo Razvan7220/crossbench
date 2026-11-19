@@ -100,6 +100,7 @@ PROFILES_DIR = CONFIGS_DIR / "profiles"
 
 # Names of built-in profiles (resolved from configs/profiles/<name>.toml)
 BUILTIN_PROFILES = ("local", "online", "claude", "o3_mini", "gpt4o_mini", "no_memory",
+                    "ollama_memory", "ollama_8threads", "embed_1536",
                     "mem0v1_api", "mem0v1_embedded",
                     "mem0v2_api", "mem0v2_embedded",
                     "evermemos_api", "evermemos_embedded",

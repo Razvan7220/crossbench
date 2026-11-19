@@ -2,17 +2,23 @@
 #  BASE PROFILE: local
 # =============================================================================
 #  Fully offline — zero cloud API calls.
-#  LLM:        Qwen3:7b via Ollama
+#  LLM:        Qwen2.5:7b-instruct via Ollama
 #  Embeddings: nomic-embed-text via Ollama
 #
-#  Stack with memory mixins:
-#    cross-bench run -p local -p mem0 -b humaneval
+#  Stack with memory mixins (``ollama_memory`` must come AFTER the memory
+#  mixin so the memory system's internal LLM/embeddings also point at
+#  Ollama; ``ollama_8threads``, when used, comes last):
 #    cross-bench run -p local -p no_memory -b humaneval
+#    cross-bench run -p local -p graphiti -p ollama_memory -b locomo_original
+#    cross-bench run -p local -p graphiti -p ollama_memory -p ollama_8threads -b locomo_original
 #
-#  Prerequisites:
-#    1. docker compose --profile ollama up -d
-#    2. docker exec ollama ollama pull qwen3:7b
-#    3. docker exec ollama ollama pull nomic-embed-text:latest
+#  Prerequisites (native Ollama or the docker-compose profile):
+#    ollama pull qwen2.5:7b-instruct
+#    ollama pull nomic-embed-text:latest
+#  Alternative via Docker:
+#    docker compose --profile ollama up -d
+#    docker exec ollama ollama pull qwen2.5:7b-instruct
+#    docker exec ollama ollama pull nomic-embed-text:latest
 # =============================================================================
 
 # NOTE: ``execution_mode`` / ``max_agent_steps`` / ``timeout_seconds``
@@ -20,14 +26,17 @@
 # Scaffold is the benchmark TOML's decision; this profile only declares
 # **which LLM/embedding** the run uses.
 [run]
-tags = ["local", "ollama", "qwen3"]
+tags = ["local", "ollama", "qwen2.5"]
 
 [system.llm]
 provider = "generic_openai"
-model = "qwen3:7b"
+model = "qwen2.5:7b-instruct"
 max_tokens = 4096
 base_url = "http://localhost:11434/v1"
 api_key = "not-needed"
+# CPU-only Ollama can take a while on long LoCoMo prompts; the driver
+# default of 120s is too tight for 7B generation plus memory extraction.
+request_timeout = 600
 
 [system.embedding]
 provider = "ollama"

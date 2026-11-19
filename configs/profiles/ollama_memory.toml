@@ -1,0 +1,70 @@
+# =============================================================================
+#  MEMORY OVERRIDE MIXIN: ollama_memory
+# =============================================================================
+#  Points embedded memory systems' internal LLM + embedding calls at the
+#  local Ollama server instead of OpenAI.
+#
+#  IMPORTANT: stack this AFTER the memory mixin so it wins the merge
+#  (and stack ``ollama_8threads`` after it on CPU-pinned hosts):
+#    cross-bench run -p local -p graphiti -p ollama_memory -b locomo_original
+#    cross-bench run -p local -p evermemos_embedded -p ollama_memory -b locomo_original
+#    cross-bench run -p local -p hindsight_embedded -p ollama_memory -b locomo_original
+#    cross-bench run -p local -p rag -p ollama_memory -b locomo_original
+#    cross-bench run -p local -p evermemos_embedded -p ollama_memory -p ollama_8threads -b locomo_original
+#
+#  Covers:
+#    - graphiti_embedded       (llm_* + embedding_model, shared OpenAI client)
+#    - evermemos_embedded      (llm_* + embedding_model, shared OpenAI client)
+#    - hindsight_embedded      (llm_* + embedding_model)
+#    - rag                     (embedding_* only; no internal LLM)
+#    - mem0v1_embedded / mem0v2_embedded
+#                              (native Ollama embedder via ``embedder_base_url``;
+#                               Qdrant vector size via ``embedder_dims``)
+#    - memos_embedded          (native Ollama embedder for ``general_text`` +
+#                               MemReader; Qdrant dim via ``embedder_dims``)
+#    - mastra_embedded         (embedding_provider = "ollama")
+#
+#  ``nomic-embed-text`` returns 768 dims; the profile therefore sets
+#  ``embedder_dims = 768`` so Mem0/MemOS Qdrant collections match.  For a
+#  1536-dim model (GTE-Qwen2) stack ``-p embed_1536`` LAST instead — it
+#  overrides all embedding keys below.
+#
+#  Prerequisites:
+#    ollama pull qwen2.5:7b-instruct
+#    ollama pull nomic-embed-text:latest
+# =============================================================================
+
+[run]
+tags = ["ollama", "local-memory"]
+
+[system.memory.params]
+# --- Internal LLM (fact extraction / graph building / agentic retrieval) ---
+llm_model = "qwen2.5:7b-instruct"
+llm_base_url = "http://localhost:11434/v1"
+llm_api_key = "ollama-local"
+
+# --- Internal embeddings ---------------------------------------------------
+# Graphiti / EverMemOS / Hindsight read ``embedding_model`` and reuse
+# ``llm_base_url`` for the /v1/embeddings call. RAG additionally reads
+# ``embedding_base_url`` + ``embedding_api_key`` because it builds its own
+# OpenAI client for embeddings.
+embedding_model = "nomic-embed-text:latest"
+embedding_base_url = "http://localhost:11434/v1"
+embedding_api_key = "ollama-local"
+
+# --- mem0 / MemOS style keys -----------------------------------------------
+# Native Ollama embedder endpoint (no ``/v1``) plus the vector dimension,
+# which Mem0/MemOS use to size their Qdrant collections.
+embedder_model = "nomic-embed-text:latest"
+embedder_provider = "ollama"
+embedder_base_url = "http://localhost:11434"
+embedder_dims = 768
+
+# Mastra's embedder switch (SentenceTransformer by default).
+embedding_provider = "ollama"
+
+# EverMemOS retrieval: the default "agentic" mode makes an extra LLM call
+# per question. On CPU-only Ollama that dominates runtime, so this local
+# profile uses lexical retrieval. Remove this line if you want to benchmark
+# EverMemOS's agentic retrieval and can afford the latency.
+retrieve_method = "keyword"
