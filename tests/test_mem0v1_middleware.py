@@ -376,3 +376,49 @@ class TestMem0V1VersionGuard:
         msg = str(exc_info.value)
         assert "memory-mem0v1" in msg
         assert "separate" in msg.lower() or "cannot coexist" in msg.lower()
+
+
+class TestBuildEmbeddedConfigOllama:
+    """v1 config translation for the local Ollama profiles."""
+
+    def test_native_urls_and_dims(self):
+        from cross_bench.systems.memory.mem0v1_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_provider": "openai",
+            "llm_base_url": "http://localhost:11434/v1",
+            "llm_api_key": "ollama-local",
+            "embedder_provider": "ollama",
+            "embedder_model": "gte-qwen2:8t",
+            "embedder_base_url": "http://localhost:11434",
+            "embedder_dims": 1536,
+            "vector_store_provider": "qdrant",
+            "vector_store_path": "/tmp/qdrant-test",
+        })
+
+        assert cfg["llm"]["config"]["api_key"] == "ollama-local"
+        assert cfg["embedder"]["config"]["ollama_base_url"] == "http://localhost:11434"
+        assert cfg["embedder"]["config"]["embedding_dims"] == 1536
+        assert cfg["vector_store"]["config"]["embedding_model_dims"] == 1536
+
+    def test_embedder_url_falls_back_to_native_llm_url(self):
+        from cross_bench.systems.memory.mem0v1_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_base_url": "http://localhost:11434/v1",
+            "embedder_provider": "ollama",
+        })
+
+        assert cfg["embedder"]["config"]["ollama_base_url"] == "http://localhost:11434"
+
+    def test_ollama_llm_key_is_not_forwarded(self):
+        """The native ollama client must not receive an OpenAI-style key."""
+        from cross_bench.systems.memory.mem0v1_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_provider": "ollama",
+            "llm_base_url": "http://localhost:11434/v1",
+            "llm_api_key": "ollama-local",
+        })
+
+        assert "api_key" not in cfg["llm"]["config"]

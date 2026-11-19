@@ -72,6 +72,7 @@ from cross_bench.systems.memory._mem0_token_hook import (
     install_mem0_token_hook,
     run_in_executor_with_accountant,
 )
+from cross_bench.systems.memory._ollama_urls import native_ollama_url
 from cross_bench.systems.registry import register_memory
 
 logger = logging.getLogger(__name__)
@@ -242,11 +243,18 @@ def _build_embedded_config(params: dict[str, Any]) -> dict[str, Any]:
             llm_cfg["config"]["model"] = params["llm_model"]
         if params.get("llm_base_url"):
             if llm_provider == "ollama":
-                llm_cfg["config"]["ollama_base_url"] = params["llm_base_url"]
+                llm_cfg["config"]["ollama_base_url"] = native_ollama_url(
+                    params["llm_base_url"]
+                )
             else:
                 # All other providers in v1 use ``openai_base_url`` on their
                 # OpenAI-compatible config class.
                 llm_cfg["config"]["openai_base_url"] = params["llm_base_url"]
+        if params.get("llm_api_key") and llm_provider != "ollama":
+            # Local OpenAI-compatible servers (Ollama, vLLM) ignore the
+            # key, but the OpenAI SDK refuses to start without one.  The
+            # native Ollama client does not take an OpenAI-style key.
+            llm_cfg["config"]["api_key"] = params["llm_api_key"]
         if params.get("llm_temperature") is not None:
             llm_cfg["config"]["temperature"] = params["llm_temperature"]
         cfg["llm"] = llm_cfg
@@ -256,8 +264,18 @@ def _build_embedded_config(params: dict[str, Any]) -> dict[str, Any]:
         emb_cfg: dict[str, Any] = {"provider": emb_provider, "config": {}}
         if params.get("embedder_model"):
             emb_cfg["config"]["model"] = params["embedder_model"]
-        if params.get("llm_base_url") and emb_provider == "ollama":
-            emb_cfg["config"]["ollama_base_url"] = params["llm_base_url"]
+        embedder_url = params.get("embedder_base_url")
+        if emb_provider == "ollama":
+            embedder_url = native_ollama_url(
+                embedder_url or params.get("llm_base_url")
+            )
+            if embedder_url:
+                emb_cfg["config"]["ollama_base_url"] = embedder_url
+        elif embedder_url:
+            emb_cfg["config"]["openai_base_url"] = embedder_url
+        dims = params.get("embedder_dims") or params.get("embedding_dims")
+        if dims is not None:
+            emb_cfg["config"]["embedding_dims"] = int(dims)
         cfg["embedder"] = emb_cfg
 
     vs_provider = params.get("vector_store_provider")
@@ -271,6 +289,13 @@ def _build_embedded_config(params: dict[str, Any]) -> dict[str, Any]:
             vs_cfg["config"]["port"] = params["vector_store_port"]
         if params.get("vector_store_collection"):
             vs_cfg["config"]["collection_name"] = params["vector_store_collection"]
+        vs_dims = (
+            params.get("vector_store_dims")
+            or params.get("embedder_dims")
+            or params.get("embedding_dims")
+        )
+        if vs_dims is not None and vs_provider == "qdrant":
+            vs_cfg["config"]["embedding_model_dims"] = int(vs_dims)
         cfg["vector_store"] = vs_cfg
 
     if params.get("custom_fact_extraction_prompt"):

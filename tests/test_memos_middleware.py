@@ -83,6 +83,7 @@ def _make_middleware(
     mw._llm_api_key = "sk-test"
     mw._embedder_provider = "openai"
     mw._embedder_model = "text-embedding-3-small"
+    mw._embedder_base_url = "https://api.openai.com/v1"
     mw._embedder_dims = 1536
     mw._use_rest = False
     mw._rest_url = ""
@@ -670,3 +671,69 @@ class TestSourceIdPlumbing:
         result = asyncio.run(mw.pre_prompt("support group", ctx))
         assert ctx["retrieved_context_ids"] == ["D1:3"]
         assert "[8 May 2023]" in result
+
+
+class TestEmbedderConfig:
+    """Ollama embedder plumbing (1536-dim GTE profile).
+
+    MemOS' native Ollama embedder expects ``api_base`` without ``/v1``;
+    OpenAI-compatible providers must keep using ``universal_api``.  The
+    Qdrant collection size must follow ``embedder_dims`` rather than the
+    old hardcoded 1536.
+    """
+
+    def test_ollama_uses_native_backend(self):
+        mw = _make_middleware(backend="general_text")
+        mw._embedder_provider = "ollama"
+        mw._embedder_model = "gte-qwen2:8t"
+        mw._embedder_base_url = "http://localhost:11434"
+        mw._embedder_dims = 1536
+
+        block = mw._embedder_config_block()
+
+        assert block == {
+            "backend": "ollama",
+            "config": {
+                "model_name_or_path": "gte-qwen2:8t",
+                "api_base": "http://localhost:11434",
+            },
+        }
+
+    def test_general_text_uses_native_embedder_and_dims(self):
+        mw = _make_middleware(backend="general_text")
+        mw._embedder_provider = "ollama"
+        mw._embedder_model = "gte-qwen2:8t"
+        mw._embedder_base_url = "http://localhost:11434"
+        mw._embedder_dims = 1536
+
+        cfg = mw._build_text_mem_inner_config()
+
+        assert cfg["embedder"]["backend"] == "ollama"
+        assert cfg["embedder"]["config"]["api_base"] == "http://localhost:11434"
+        assert cfg["vector_db"]["config"]["vector_dimension"] == 1536
+
+    def test_dims_follow_non_default_embedder(self):
+        """A 768-dim embedder must not inherit Qdrant's old 1536 default."""
+        mw = _make_middleware(backend="general_text")
+        mw._embedder_provider = "ollama"
+        mw._embedder_model = "nomic-embed-text:8t"
+        mw._embedder_base_url = "http://localhost:11434"
+        mw._embedder_dims = 768
+
+        cfg = mw._build_text_mem_inner_config()
+
+        assert cfg["vector_db"]["config"]["vector_dimension"] == 768
+
+    def test_openai_keeps_universal_api_backend(self):
+        mw = _make_middleware(backend="general_text")
+        mw._embedder_provider = "openai"
+        mw._embedder_model = "text-embedding-3-small"
+        mw._embedder_base_url = "https://api.openai.com/v1"
+        mw._embedder_dims = 1536
+
+        block = mw._embedder_config_block()
+
+        assert block["backend"] == "universal_api"
+        assert block["config"]["provider"] == "openai"
+        assert block["config"]["base_url"] == "https://api.openai.com/v1"
+        assert block["config"]["embedding_dims"] == 1536

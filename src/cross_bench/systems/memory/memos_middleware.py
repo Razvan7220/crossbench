@@ -85,6 +85,10 @@ Config params (in ``MemoryConfig.params``):
     llm_api_key:        Defaults to ``$OPENAI_API_KEY``
     embedder_provider:  (auto-inherited)
     embedder_model:     (auto-inherited; default ``text-embedding-3-small``)
+    embedder_base_url:  Optional embedding endpoint override. For Ollama
+                        use the native URL (no ``/v1``).
+    embedder_dims:      Embedding dimension; also sets the Qdrant
+                        ``vector_dimension`` for ``general_text``.
     use_rest_api:       REST mode (drift-flagged ❌ in deviations.md O20).
     rest_api_url:       Default ``http://localhost:8001``
 
@@ -114,6 +118,7 @@ from cross_bench.systems.memory._memos_token_hook import (
     install_memos_token_hook,
     run_in_executor_with_accountant,
 )
+from cross_bench.systems.memory._ollama_urls import native_ollama_url
 from cross_bench.systems.registry import register_memory
 
 logger = logging.getLogger(__name__)
@@ -264,7 +269,24 @@ class MemOSMiddleware(MemoryMiddleware):
         self._embedder_model = params.get(
             "embedder_model", "text-embedding-3-small"
         )
-        self._embedder_dims = int(params.get("embedder_dims", 1536))
+        # MemOS' native Ollama embedder expects api_base without ``/v1``;
+        # OpenAI-compatible providers (universal_api) need the ``/v1``
+        # suffix. An explicit ``embedder_base_url`` wins; otherwise derive
+        # it from the internal-LLM base URL.
+        _embedder_base_url = params.get("embedder_base_url")
+        if self._embedder_provider == "ollama":
+            self._embedder_base_url = native_ollama_url(
+                _embedder_base_url or self._llm_base_url
+            )
+        else:
+            self._embedder_base_url = (
+                _embedder_base_url or self._llm_base_url
+            )
+        self._embedder_dims = int(
+            params.get("embedder_dims")
+            or params.get("embedding_dims")
+            or 1536
+        )
 
         # REST mode (drift-flagged in deviations.md O20).
         self._use_rest = bool(params.get("use_rest_api", False))
@@ -361,6 +383,32 @@ class MemOSMiddleware(MemoryMiddleware):
                     e,
                 )
 
+    def _embedder_config_block(self) -> dict[str, Any]:
+        """Embedder config block for both MemReader and ``general_text``.
+
+        Upstream's ``universal_api`` backend only knows OpenAI/Azure, so
+        an Ollama embedder must use the native ``ollama`` backend and the
+        non-``/v1`` ``api_base``.
+        """
+        if self._embedder_provider == "ollama":
+            return {
+                "backend": "ollama",
+                "config": {
+                    "model_name_or_path": self._embedder_model,
+                    "api_base": self._embedder_base_url,
+                },
+            }
+        return {
+            "backend": "universal_api",
+            "config": {
+                "provider": self._embedder_provider,
+                "model_name_or_path": self._embedder_model,
+                "api_key": self._llm_api_key,
+                "base_url": self._embedder_base_url,
+                "embedding_dims": self._embedder_dims,
+            },
+        }
+
     def _build_fresh_mem_reader(self):
         """Construct upstream's SimpleStructMemReader programmatically.
 
@@ -389,16 +437,7 @@ class MemOSMiddleware(MemoryMiddleware):
                             "temperature": 0.0,
                         },
                     },
-                    "embedder": {
-                        "backend": "universal_api",
-                        "config": {
-                            "provider": self._embedder_provider,
-                            "model_name_or_path": self._embedder_model,
-                            "api_key": self._llm_api_key,
-                            "base_url": self._llm_base_url,
-                            "embedding_dims": self._embedder_dims,
-                        },
-                    },
+                    "embedder": self._embedder_config_block(),
                     "chunker": {
                         "backend": "sentence",
                         "config": {
@@ -459,20 +498,13 @@ class MemOSMiddleware(MemoryMiddleware):
             return {"extractor_llm": llm_block}
 
         if self._backend == "general_text":
-            embedder_block = {
-                "backend": self._embedder_provider,
-                "config": {
-                    "model_name_or_path": self._embedder_model,
-                    "api_base": self._llm_base_url,
-                    "api_key": self._llm_api_key,
-                },
-            }
+            embedder_block = self._embedder_config_block()
             # Qdrant in local/embedded mode (host=None, port=None).
             vec_db_block = {
                 "backend": "qdrant",
                 "config": {
                     "collection_name": "memos_bench",
-                    "vector_dimension": 1536,  # text-embedding-3-small
+                    "vector_dimension": self._embedder_dims,
                     "distance_metric": "cosine",
                     "host": None,
                     "port": None,

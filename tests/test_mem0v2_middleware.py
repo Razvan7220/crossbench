@@ -410,3 +410,105 @@ class TestBuildEmbeddedConfigAWSBedrock:
             "aws_region": "us-east-1",  # stray
         })
         assert "aws_region" not in cfg["llm"]["config"]
+
+
+class TestBuildEmbeddedConfigOllama:
+    """Ollama embedding plumbing for the 1536-dim GTE profile.
+
+    Mem0's ``OllamaEmbedding`` uses the native ``ollama.Client`` (no
+    ``/v1``), while the extractor LLM often rides Ollama's
+    OpenAI-compatible endpoint.  The config builder must keep the two
+    separate, and Qdrant must be told the embedder dimension instead of
+    assuming the 1536 default.
+    """
+
+    def test_native_embedder_url_and_dims(self):
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_provider": "openai",
+            "llm_model": "qwen2.5:7b-instruct-8t",
+            "llm_base_url": "http://localhost:11434/v1",
+            "embedder_provider": "ollama",
+            "embedder_model": "gte-qwen2:8t",
+            "embedder_base_url": "http://localhost:11434",
+            "embedder_dims": 1536,
+            "vector_store_provider": "qdrant",
+            "vector_store_path": "/tmp/qdrant-test",
+        })
+
+        assert cfg["embedder"]["config"]["model"] == "gte-qwen2:8t"
+        assert cfg["embedder"]["config"]["ollama_base_url"] == "http://localhost:11434"
+        assert cfg["embedder"]["config"]["embedding_dims"] == 1536
+        assert cfg["vector_store"]["config"]["embedding_model_dims"] == 1536
+
+    def test_embedder_url_falls_back_to_native_llm_url(self):
+        """Existing ``ollama_memory`` stacks have no ``embedder_base_url``."""
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_base_url": "http://localhost:11434/v1",
+            "embedder_provider": "ollama",
+        })
+
+        assert cfg["embedder"]["config"]["ollama_base_url"] == "http://localhost:11434"
+
+    def test_ollama_llm_url_is_native(self):
+        """``llm_provider=ollama`` also uses the native client."""
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_provider": "ollama",
+            "llm_model": "qwen2.5:7b-instruct-8t",
+            "llm_base_url": "http://localhost:11434/v1/",
+        })
+
+        assert cfg["llm"]["config"]["ollama_base_url"] == "http://localhost:11434"
+
+    def test_openai_embedder_keeps_v1_suffix(self):
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "embedder_provider": "openai",
+            "embedder_model": "text-embedding-3-small",
+            "embedder_base_url": "http://localhost:11434/v1",
+            "embedder_dims": 768,
+        })
+
+        assert cfg["embedder"]["config"]["openai_base_url"] == "http://localhost:11434/v1"
+        assert cfg["embedder"]["config"]["embedding_dims"] == 768
+
+    def test_qdrant_dims_not_set_for_other_vector_stores(self):
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "embedder_dims": 1536,
+            "vector_store_provider": "chroma",
+            "vector_store_path": "/tmp/chroma-test",
+        })
+
+        assert "embedding_model_dims" not in cfg["vector_store"]["config"]
+
+    def test_llm_api_key_is_forwarded(self):
+        """Profiles set ``llm_api_key``; the OpenAI SDK needs it explicitly."""
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_provider": "openai",
+            "llm_base_url": "http://localhost:11434/v1",
+            "llm_api_key": "ollama-local",
+        })
+
+        assert cfg["llm"]["config"]["api_key"] == "ollama-local"
+
+    def test_ollama_llm_key_is_not_forwarded(self):
+        """The native ollama client must not receive an OpenAI-style key."""
+        from cross_bench.systems.memory.mem0v2_middleware import _build_embedded_config
+
+        cfg = _build_embedded_config({
+            "llm_provider": "ollama",
+            "llm_base_url": "http://localhost:11434/v1",
+            "llm_api_key": "ollama-local",
+        })
+
+        assert "api_key" not in cfg["llm"]["config"]

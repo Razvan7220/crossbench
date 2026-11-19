@@ -287,7 +287,14 @@ class MastraEmbeddedMiddleware(MemoryMiddleware):
         llm_model:            LLM for working memory + observation (default gpt-4o-mini)
         llm_api_key:          API key for the LLM
         llm_base_url:         Base URL (default https://api.openai.com/v1)
-        embedding_model:      Sentence-transformer model (default all-MiniLM-L6-v2)
+        embedding_model:      Sentence-transformer model, or the model name
+                              when ``embedding_provider`` is set (default
+                              all-MiniLM-L6-v2)
+        embedding_provider:   ``sentence_transformers`` (default),
+                              ``ollama``, ``openai`` or ``openai_compatible``
+        embedding_base_url:   OpenAI-compatible endpoint (``/v1``) for the
+                              non-SentenceTransformer providers
+        embedding_api_key:    API key for the embedding endpoint
         semantic_top_k:       Top-K for semantic recall (default 4, matches upstream)
         message_range_before: Messages before each vector hit (default 1, matches upstream)
         message_range_after:  Messages after each vector hit (default 1, matches upstream)
@@ -316,6 +323,15 @@ class MastraEmbeddedMiddleware(MemoryMiddleware):
 
         # Embedding
         self._embedding_model_name = p.get("embedding_model", "all-MiniLM-L6-v2")
+        self._embedding_provider = p.get(
+            "embedding_provider", "sentence_transformers"
+        )
+        self._embedding_base_url = p.get(
+            "embedding_base_url", "https://api.openai.com/v1"
+        ).rstrip("/")
+        self._embedding_api_key = (
+            p.get("embedding_api_key", "") or self._llm_api_key
+        )
         self._embedder = None  # lazy
 
         # Retrieval settings — defaults match upstream
@@ -353,6 +369,20 @@ class MastraEmbeddedMiddleware(MemoryMiddleware):
         return self._embedder
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
+        if self._embedding_provider in {"ollama", "openai", "openai_compatible"}:
+            from openai import OpenAI
+
+            base_url = self._embedding_base_url
+            if self._embedding_provider == "ollama" and not base_url.endswith("/v1"):
+                base_url = f"{base_url}/v1"
+            client = OpenAI(
+                api_key=self._embedding_api_key or "ollama-local",
+                base_url=base_url,
+            )
+            resp = client.embeddings.create(
+                model=self._embedding_model_name, input=texts
+            )
+            return [item.embedding for item in resp.data]
         model = self._get_embedder()
         return model.encode(texts, normalize_embeddings=True).tolist()
 
