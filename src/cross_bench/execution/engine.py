@@ -485,9 +485,11 @@ class RunEngine:
                 # streamed in (not anything that survived the reset).
                 conv_ingest_before = _snapshot_memory_stats(memory)
 
+                conv_messages = conv.get("messages", [])
+                conv_ingest_started = time.monotonic()
                 logger.info("run.conv_ingesting", conv_id=conv_id,
-                            messages=len(conv.get("messages", [])))
-                for msg in conv.get("messages", []):
+                            messages=len(conv_messages))
+                for msg_idx, msg in enumerate(conv_messages, start=1):
                     speaker = msg.get("speaker_name", msg.get("speaker_id", "unknown"))
                     content = msg.get("content", "")
                     # Pass raw content — speaker attribution is handled via
@@ -515,6 +517,25 @@ class RunEngine:
                         "source_id": str(source_id),
                     })
                     total_messages_ingested += 1
+
+                    # Progress heartbeat for long CPU-bound ingestions.
+                    # Without this the log is silent for hours between
+                    # ``conv_ingesting`` and ``conv_answering``, which makes
+                    # it impossible to distinguish "slow" from "stuck".
+                    if msg_idx % 10 == 0 or msg_idx == len(conv_messages):
+                        elapsed = time.monotonic() - conv_ingest_started
+                        rate = msg_idx / elapsed if elapsed > 0 else 0.0
+                        remaining = len(conv_messages) - msg_idx
+                        eta = remaining / rate if rate > 0 else 0.0
+                        logger.info(
+                            "run.conv_ingest_progress",
+                            conv_id=conv_id,
+                            done=msg_idx,
+                            total=len(conv_messages),
+                            elapsed_s=round(elapsed, 1),
+                            msg_per_s=round(rate, 4),
+                            eta_s=round(eta, 1),
+                        )
 
                 # Flush any remaining accumulator
                 if hasattr(memory, "_flush_accumulator") and hasattr(memory, "_accumulator"):
