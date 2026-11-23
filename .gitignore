@@ -64,6 +64,7 @@ secrets/
 
 # Artifacts / run outputs
 artifacts/
+artifacts_local_ollama/
 logs/
 *.jsonl
 
